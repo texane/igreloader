@@ -12,6 +12,7 @@ static int do_program(void* dev, const char* filename)
 
   hex_range_t* ranges;
   hex_range_t* pos;
+  unsigned int flags;
   size_t off;
   size_t i;
   size_t page_size;
@@ -23,14 +24,25 @@ static int do_program(void* dev, const char* filename)
     goto on_error;
   }
 
-  hex_print_ranges(ranges);
-  printf("--\n");
-
   hex_merge_ranges(&ranges);
 
   /* for each range, write pages */
   for (pos = ranges; pos != NULL; pos = pos->next)
   {
+    flags = get_mem_flags(pos->addr, pos->size);
+
+    if (flags & MEM_FLAG_RESERVED)
+    {
+      printf("invalid memory\n");
+      goto on_error;
+    }
+
+    if ((flags & MEM_FLAG_USER) == 0)
+    {
+      printf("TODO: configuration space\n");
+      continue ;
+    }
+
     /* handle unaligned first page */
     off = 0;
     page_size = FLASH_PAGE_SIZE - (pos->addr % FLASH_PAGE_SIZE);
