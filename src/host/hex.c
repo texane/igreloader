@@ -1,17 +1,19 @@
+#include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include "hex.h"
+#include "dev.h"
+#include "lendian.h"
 
 
-/* dspic33f related */
-
-#define FLASH_PAGE_SIZE (512 * 3)
+/* todo: dspic33f related, move in device specific */
 
 static inline uint32_t get_mem_flags(uint32_t addr, uint16_t size)
 {
@@ -44,57 +46,6 @@ static inline uint32_t get_mem_flags(uint32_t addr, uint16_t size)
 
   return flags;
 }
-
-
-/* endianness */
-
-#define CONFIG_USE_LENDIAN 1
-
-#if CONFIG_USE_LENDIAN
-
-static inline uint16_t read_uint16(uint8_t* s)
-{
-  return *(uint16_t*)s;
-}
-
-static inline uint32_t read_uint32(uint8_t* s)
-{
-  return *(uint32_t*)s;
-}
-
-static inline void write_uint16(uint8_t* s, uint16_t x)
-{
-  *(uint16_t*)s = x;
-}
-
-static inline void write_uint32(uint8_t* s, uint32_t x)
-{
-  *(uint32_t*)s = x;
-}
-
-#else /* local is big endian */
-
-static inline uint16_t read_uint16(uint8_t* s)
-{
-  /* todo */
-}
-
-static inline uint32_t read_uint32(uint8_t* s)
-{
-  /* todo */
-}
-
-static inline void write_uint16(uint8_t* s, uint16_t x)
-{
-  /* todo */
-}
-
-static inline void write_uint32(uint8_t* s, uint32_t x)
-{
-  /* todo */
-}
-
-#endif /* CONFIG_USE_LENDIAN */
 
 
 /* memory mapped file */
@@ -139,21 +90,7 @@ static void unmap_file(mapped_file_t * mf)
 }
 
 
-/* hex file format */
-
-typedef struct hex_range
-{
-  struct hex_range* next;
-  struct hex_range* prev;
-
-  uint32_t addr;
-
-  size_t size;
-  uint8_t buf[1];
-
-} hex_range_t;
-
-static void hex_free_ranges(hex_range_t* ranges)
+void hex_free_ranges(hex_range_t* ranges)
 {
   hex_range_t* tmp;
   while (ranges != NULL)
@@ -233,7 +170,7 @@ static int next_digit
   return 0;
 }
 
-static int hex_read_ranges(const char* filename, hex_range_t** first_range)
+int hex_read_ranges(const char* filename, hex_range_t** first_range)
 {
   int err = -1;
   mapped_file_t mf = MAPPED_FILE_INITIALIZER;
@@ -502,7 +439,7 @@ static void hex_paginate_ranges(hex_range_t** ranges)
 
 #endif /* unused, broken */
 
-static void hex_merge_ranges(hex_range_t** ranges)
+void hex_merge_ranges(hex_range_t** ranges)
 {
   /* merge the contiguous ranges */
 
@@ -563,118 +500,13 @@ static int hex_check_ranges(const hex_range_t* ranges)
   return 0;
 }
 
-#if 1 /* unused */
-
-#include <stdio.h>
-
-__attribute__((unused))
-static void hex_print_ranges(const hex_range_t* ranges)
+void hex_print_ranges(const hex_range_t* ranges)
 {
   for (; ranges != NULL; ranges = ranges->next)
   {
-    printf("[ %x - %x [ (%x)\n",
-	   ranges->addr, ranges->addr + ranges->size, ranges->size);
+    printf("[ %x - %x [ (%x) %x\n",
+	   ranges->addr, ranges->addr + ranges->size,
+	   ranges->size,
+	   get_mem_flags(ranges->addr, ranges->size));
   }
-}
-
-#endif /* unused */
-
-
-/* write hex file to flash */
-
-static int do_program(void* dev, const char* filename)
-{
-  /* filename a hex file */
-
-  hex_range_t* ranges;
-  hex_range_t* pos;
-  size_t off;
-  size_t i;
-  size_t page_size;
-  uint8_t buf[8];
-
-  if (hex_read_ranges(filename, &ranges) == -1)
-  {
-    printf("invalid hex file\n");
-    goto on_error;
-  }
-
-  hex_print_ranges(ranges);
-  printf("--\n");
-
-  hex_merge_ranges(&ranges);
-
-  /* for each range, write pages */
-  for (pos = ranges; pos != NULL; pos = pos->next)
-  {
-    /* handle unaligned first page */
-    off = 0;
-    page_size = FLASH_PAGE_SIZE - (pos->addr % FLASH_PAGE_SIZE);
-
-    printf("range [%x - %x[: 0x%x\n",
-	   pos->addr, pos->addr + pos->size,
-	   get_mem_flags(pos->addr, pos->size));
-
-    while (1)
-    {
-      /* adjust page size */
-      page_size = FLASH_PAGE_SIZE;
-      if ((off + page_size) > pos->size) page_size = pos->size - off;
-
-      /* todo: check device addr range */
-
-      /* initiate write sequence */
-#define CMD_ID_WRITE_PROGRAM 0
-      buf[0] = CMD_ID_WRITE_PROGRAM;
-      write_uint32(buf + 1, pos->addr + off);
-      write_uint16(buf + 5, page_size);
-
-      /* todo: com_send(dev, buf); */
-
-      /* todo: wait for command ack */
-
-      /* send the page 8 bytes at a time */
-      for (i = 0; i < pos->size; i += 8)
-      {
-	/* todo: com_send(dev, pos->buf + off + i); */
-
-	/* todo: wait for data ack */
-      }
-
-      /* todo: wait for page programming ack */
-
-      /* next page or done */
-      off += page_size;
-      if (off == pos->size) break ;
-    }
-  }
-
- on_error:
-  if (ranges != NULL) hex_free_ranges(ranges);
-
-  return 0;
-}
-
-
-/* main */
-
-#include <stdio.h>
-
-int main(int ac, char** av)
-{
-  /* command line: ./a.out <device> <file.hex> */
-
-  const char* const devname = av[1];
-  const char* const filename = av[2];
-
-  /* todo: initialize serial */
-
-  /* program device flash */
-  if (do_program(NULL, filename) == -1)
-  {
-    printf("programming failed\n");
-    return -1;
-  }
-
-  return 0;
 }

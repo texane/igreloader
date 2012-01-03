@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
 
 gcc -Wall \
-../src/host/hex.c
+-I../src/host \
+../src/host/main.c \
+../src/host/hex.c \
+../src/host/serial.c
