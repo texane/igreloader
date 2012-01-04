@@ -1,4 +1,5 @@
 #include <p33Fxxxx.h>
+#include "../common/common.h"
 
 
 /* configuration bits */
@@ -310,13 +311,6 @@ static inline void flush_program_latches(void)
 
 
 /* commands */
-
-#define CMD_ID_WRITE_PROGRAM 0
-#define CMD_ID_WRITE_CONFIG 1
-#define CMD_ID_READ_PROGRAM 2
-#define CMD_ID_READ_CONFIG 3
-#define CMD_ID_STATUS 4
-#define CMD_ID_GO 5
 
 static void read_process_cmd(void)
 {

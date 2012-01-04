@@ -2,6 +2,7 @@
 #include "dev.h"
 #include "hex.h"
 #include "lendian.h"
+#include "../common/common.h"
 
 
 /* write hex file to device memory */
@@ -56,7 +57,6 @@ static int do_program(void* dev, const char* filename)
       /* todo: check device addr range */
 
       /* initiate write sequence */
-#define CMD_ID_WRITE_PROGRAM 0
       buf[0] = CMD_ID_WRITE_PROGRAM;
       write_uint32(buf + 1, pos->addr + off);
       write_uint16(buf + 5, page_size);
