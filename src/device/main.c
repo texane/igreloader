@@ -199,21 +199,17 @@ static void uart_read(uint8_t* s)
 /* program memory routines */
 
 static inline void read_program_word
-(uint16_t haddr, uint16_t laddr, uint16_t hdata, uint16_t ldata)
+(uint16_t haddr, uint16_t laddr, uint16_t data)
 {
   /* read a 24 bits program word at addr to [data] */
 
-  register uint16_t tmp asm("w7");
-
   __asm__ __volatile__
   (
-   "mov %1, TBLPAG \n\t"
-   "tblrdl [ %2 ], %0 \n\t"
-   "mov %5, [ %4 ] \n\t"
-   "tblrdh [ %2 ], %0 \n\t"
-   "mov %5, [ %3 ] \n\t"
-   : "=&r"(tmp)
-   : "r"(haddr), "r"(laddr), "r"(hdata), "r"(ldata), "0"(tmp)
+   "mov %0, TBLPAG \n\t"
+   "tblrdl [ %1 ], [ %2 ] \n\t"
+   "tblrdh.b [ %1 ], [ %2 ] \n\t"
+   :
+   : "r"(haddr), "r"(laddr), "r"(data)
   );
 }
 
@@ -226,8 +222,8 @@ static inline void write_program_word
   __asm__ __volatile__
   (
    "mov %0, TBLPAG \n\t"
-   "tblwth %2, [ %1 ] \n\t"
    "tblwtl %3, [ %1 ] \n\t"
+   "tblwth %2, [ %1 ] \n\t"
    :
    : "r"(haddr), "r"(laddr), "r"(hdata), "r"(ldata)
   );
@@ -314,9 +310,9 @@ static void read_process_cmd(void)
 #define PAGE_BYTE_COUNT (PAGE_INSN_COUNT * 3)
 
   /* 8 is added to avoid overflow in com_read */
-  static uint8_t page_buf[PAGE_BYTE_COUNT + 8];
+  static uint8_t page_buf[PAGE_BYTE_COUNT + 8] __attribute__((aligned));
 
-  uint8_t cmd_buf[8];
+  uint8_t cmd_buf[8] __attribute__((aligned));
   uint32_t addr;
   uint16_t size;
   uint16_t off;
@@ -345,10 +341,7 @@ static void read_process_cmd(void)
 
 	/* read 24 bits at a time */
 	for (i = 0; i < PAGE_BYTE_COUNT; i += 3)
-	{
-	  const uint32_t tmp = (uint32_t)page_buf + i;
-	  read_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
-	}
+	  read_program_word(HI(addr), LO(addr), (uint16_t)&page_buf[i]);
       }
 
       /* erase page */
@@ -369,6 +362,7 @@ static void read_process_cmd(void)
 	/* fill the one row program memory buffer 3 bytes at a time */
 	for (j = 0; j < (ROW_BYTE_COUNT / 3); i += 3, j += 3, addr += 3)
 	{
+	  /* does not compile with -O2 */
 	  const uint32_t tmp = *(uint32_t*)(page_buf + i);
 	  write_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
@@ -396,7 +390,7 @@ static void read_process_cmd(void)
       size = read_uint16(cmd_buf + 5);
 
       /* assume addr is aligned on program word boundary */
-      /* assume size is a multiple of word size */
+      /* assume size is a multiple of program word size */
 
       /* command ack */
       com_write(cmd_buf);
@@ -406,8 +400,12 @@ static void read_process_cmd(void)
 	/* fill cmd_buffer[0:5] */
 	for (i = 0; size && (i < 6); i += 3, addr += 3, size -= 3)
 	{
-	  const uint32_t tmp = (uint16_t)cmd_buf + i;
-	  read_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
+#if 1
+	  read_program_word(HI(addr), LO(addr), (uint16_t)cmd_buf + i);
+#else /* -O2 compilation fix */
+	  const uint32_t tmp = (uint16_t)&cmd_buf[i];
+	  read_program_word(HI(addr), LO(addr), tmp);
+#endif
 	}
 
 	com_write(cmd_buf);
