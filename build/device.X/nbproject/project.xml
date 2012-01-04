@@ -6,11 +6,11 @@
             <name>device</name>
             <creation-uuid>8027d236-cb5c-44a6-89cf-6fe156769191</creation-uuid>
             <make-project-type>0</make-project-type>
-            <c-extensions/>
+            <c-extensions>c</c-extensions>
             <cpp-extensions/>
-            <header-extensions/>
-            <make-dep-projects/>
+            <header-extensions>h</header-extensions>
             <sourceEncoding>ISO-8859-1</sourceEncoding>
+            <make-dep-projects/>
         </data>
     </configuration>
 </project>

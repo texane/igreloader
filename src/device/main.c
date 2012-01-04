@@ -17,19 +17,6 @@ typedef unsigned short uint16_t;
 typedef unsigned long uint32_t;
 
 
-/* static configuration */
-
-#define CONFIG_USE_ECAN 1
-
-#if CONFIG_USE_ECAN
-# define CONFIG_USE_UART 0
-#else
-# define CONFIG_USE_UART 1
-#endif
-
-#define CONFIG_USE_LENDIAN 1
-
-
 #if 0 /* todo */
 /* software reset value */
 /* todo: put at a special location */
@@ -57,8 +44,6 @@ static void osc_setup(void)
   __builtin_write_OSCCONL(0x01);
   while (OSCCONbits.COSC != 1) ;
   while (OSCCONbits.LOCK != 1) ;
-
-  return 0;
 }
 
 
@@ -102,8 +87,11 @@ static inline void delay(void)
 
 /* endianness */
 
+#define CONFIG_USE_LENDIAN 1
+
 #if CONFIG_USE_LENDIAN
 /* data are sent in little endian, local arch is little too */
+#define read_uint8(__s) (*(uint8_t*)(__s))
 #define read_uint16(__s) (*(uint16_t*)(__s))
 #define read_uint32(__s) (*(uint32_t*)(__s))
 #define write_uint16(__s, __x) *(uint16_t*)(__s) = __x
@@ -121,7 +109,7 @@ static inline void delay(void)
 
 /* communication layer */
 
-#define CMD_BUF_SIZE 8
+#define CONFIG_USE_ECAN 0
 
 #if CONFIG_USE_ECAN
 
@@ -215,12 +203,11 @@ static inline void read_program_word
 {
   /* read a 24 bits program word at addr to [data] */
 
-  /* scratch variable. use asm("w4") to force a register. */
-  register uint16_t tmp;
+  register uint16_t tmp asm("w7");
 
   __asm__ __volatile__
   (
-   "mov %1, tblpag \n\t"
+   "mov %1, TBLPAG \n\t"
    "tblrdl [ %2 ], %0 \n\t"
    "mov %5, [ %4 ] \n\t"
    "tblrdh [ %2 ], %0 \n\t"
@@ -238,7 +225,7 @@ static inline void write_program_word
 
   __asm__ __volatile__
   (
-   "mov %0, tblpag \n\t"
+   "mov %0, TBLPAG \n\t"
    "tblwth %2, [ %1 ] \n\t"
    "tblwtl %3, [ %1 ] \n\t"
    :
@@ -249,7 +236,7 @@ static inline void write_program_word
 static inline void erase_program_page
 (uint16_t addrhi, uint16_t addrlo)
 {
-  register uint16_t tmp;
+  register uint16_t tmp asm("w7");
 
   __asm__ __volatile__
   (
@@ -270,7 +257,7 @@ static inline void erase_program_page
    "mov %3, NVMKEY \n\t"
 
    /* start erase sequence */
-   "bset NVMCOM, #15 \n\t"
+   "bset NVMCON, #15 \n\t"
 
    /* wait for end of sequence */
 #if 1
@@ -290,10 +277,10 @@ static inline void flush_program_latches(void)
 {
   /* write one program memory row */
   /* latches previously filled with write_program_word */
-
-  register uint16_t tmp;
-
   /* see erase_page for comments */
+
+  register uint16_t tmp asm("w7");
+
   __asm__ __volatile__
   (
    "mov #0x4001, %0 \n\t"
@@ -303,7 +290,7 @@ static inline void flush_program_latches(void)
    "mov %1, NVMKEY \n\t"
    "mov #0xaa, %0 \n\t"
    "mov %1, NVMKEY \n\t"
-   "bset NVMCOM, #15 \n\t"
+   "bset NVMCON, #15 \n\t"
 #if 1
    "nop \n\t"
    "nop \n\t"
@@ -359,7 +346,7 @@ static void read_process_cmd(void)
 	/* read 24 bits at a time */
 	for (i = 0; i < PAGE_BYTE_COUNT; i += 3)
 	{
-	  const uint32_t tmp = (uint32_t)(page_buf + i);
+	  const uint32_t tmp = (uint32_t)page_buf + i;
 	  read_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
       }
@@ -382,7 +369,7 @@ static void read_process_cmd(void)
 	/* fill the one row program memory buffer 3 bytes at a time */
 	for (j = 0; j < (ROW_BYTE_COUNT / 3); i += 3, j += 3, addr += 3)
 	{
-	  const uint32_t tmp = *(uint32_t*)(buf + i);
+	  const uint32_t tmp = *(uint32_t*)(page_buf + i);
 	  write_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
 
@@ -419,7 +406,7 @@ static void read_process_cmd(void)
 	/* fill cmd_buffer[0:5] */
 	for (i = 0; size && (i < 6); i += 3, addr += 3, size -= 3)
 	{
-	  const uint32_t tmp = (uint32_t)(cmd_buf + i);
+	  const uint32_t tmp = (uint16_t)cmd_buf + i;
 	  read_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
 

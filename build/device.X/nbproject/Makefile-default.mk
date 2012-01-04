@@ -39,11 +39,11 @@ OBJECTDIR=build/${CND_CONF}/${IMAGE_TYPE}
 DISTDIR=dist/${CND_CONF}/${IMAGE_TYPE}
 
 # Object Files Quoted if spaced
-OBJECTFILES_QUOTED_IF_SPACED=
-POSSIBLE_DEPFILES=
+OBJECTFILES_QUOTED_IF_SPACED=${OBJECTDIR}/_ext/252331649/main.o
+POSSIBLE_DEPFILES=${OBJECTDIR}/_ext/252331649/main.o.d
 
 # Object Files
-OBJECTFILES=
+OBJECTFILES=${OBJECTDIR}/_ext/252331649/main.o
 
 
 CFLAGS=
@@ -94,7 +94,19 @@ endif
 # ------------------------------------------------------------------------------------
 # Rules for buildStep: compile
 ifeq ($(TYPE_IMAGE), DEBUG_RUN)
+${OBJECTDIR}/_ext/252331649/main.o: ../../src/device/main.c  nbproject/Makefile-${CND_CONF}.mk
+	@${MKDIR} ${OBJECTDIR}/_ext/252331649 
+	@${RM} ${OBJECTDIR}/_ext/252331649/main.o.d 
+	@${RM} ${OBJECTDIR}/_ext/252331649/main.o.ok ${OBJECTDIR}/_ext/252331649/main.o.err 
+	@${FIXDEPS} "${OBJECTDIR}/_ext/252331649/main.o.d" $(SILENT) -c ${MP_CC} $(MP_EXTRA_CC_PRE) -g -D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1 -omf=elf -x c -c -mcpu=$(MP_PROCESSOR_OPTION) -O1 -MMD -MF "${OBJECTDIR}/_ext/252331649/main.o.d" -o ${OBJECTDIR}/_ext/252331649/main.o ../../src/device/main.c  
+	
 else
+${OBJECTDIR}/_ext/252331649/main.o: ../../src/device/main.c  nbproject/Makefile-${CND_CONF}.mk
+	@${MKDIR} ${OBJECTDIR}/_ext/252331649 
+	@${RM} ${OBJECTDIR}/_ext/252331649/main.o.d 
+	@${RM} ${OBJECTDIR}/_ext/252331649/main.o.ok ${OBJECTDIR}/_ext/252331649/main.o.err 
+	@${FIXDEPS} "${OBJECTDIR}/_ext/252331649/main.o.d" $(SILENT) -c ${MP_CC} $(MP_EXTRA_CC_PRE)  -g -omf=elf -x c -c -mcpu=$(MP_PROCESSOR_OPTION) -O1 -MMD -MF "${OBJECTDIR}/_ext/252331649/main.o.d" -o ${OBJECTDIR}/_ext/252331649/main.o ../../src/device/main.c  
+	
 endif
 
 # ------------------------------------------------------------------------------------
