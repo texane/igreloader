@@ -95,49 +95,13 @@ static inline void delay(void)
 /* endianness */
 
 #if CONFIG_USE_LENDIAN
-
-static inline uint16_t read_uint16(uint8_t* s)
-{
-  return *(uint16_t*)s;
-}
-
-static inline uint32_t read_uint32(uint8_t* s)
-{
-  return *(uint32_t*)s;
-}
-
-static inline void write_uint16(uint8_t* s, uint16_t x)
-{
-  *(uint16_t*)s = x;
-}
-
-static inline void write_uint32(uint8_t* s, uint32_t x)
-{
-  *(uint32_t*)s = x;
-}
-
+/* data are sent in little endian, local arch is little too */
+#define read_uint16(__s) (*(uint16_t*)(__s))
+#define read_uint32(__s) (*(uint32_t*)(__s))
+#define write_uint16(__s, __x) *(uint16_t*)(__s) = __x
+#define write_uint32(__s, __x) *(uint32_t*)(__s) = __x
 #else /* local is big endian */
-
-static inline uint16_t read_uint16(uint8_t* s)
-{
-  /* todo */
-}
-
-static inline uint32_t read_uint32(uint8_t* s)
-{
-  /* todo */
-}
-
-static inline void write_uint16(uint8_t* s, uint16_t x)
-{
-  /* todo */
-}
-
-static inline void write_uint32(uint8_t* s, uint32_t x)
-{
-  /* todo */
-}
-
+/* TODO */
 #endif /* CONFIG_USE_LENDIAN */
 
 
@@ -236,84 +200,112 @@ static void uart_read(uint8_t* s)
 #endif /* CONFIG_USE_UART */
 
 
-/* flash programming routines */
+/* program memory routines */
 
-static inline void erase_page(uint16_t addrhi, uint16_t addrlo)
+static inline void read_program_word
+(uint16_t haddr, uint16_t laddr, uint16_t hdata, uint16_t ldata)
 {
-#if 0
-  asm("push TBLPAG");
-#endif
+  /* read a 24 bits program word at addr to [data] */
 
-  asm("mov #0x4042, W2");
-  asm("mov W2, NVMCOM");
+  /* scratch variable. use asm("w4") to force a register. */
+  register uint16_t tmp;
 
-  /* the 24 bit target addr is (tblpag<7:0> << 16) + Wi */
-  /* i specified in the table instruction */
-  asm("mov W0, TBLPAG");
-  asm("tblwtl W1, [W1]");
+  __asm__ __volatile__
+  (
+   "mov %1, tblpag \n\t"
+   "tblrdl [ %2 ], %0 \n\t"
+   "mov %5, [ %4 ] \n\t"
+   "tblrdh [ %2 ], %0 \n\t"
+   "mov %5, [ %3 ] \n\t"
+   : "=&r"(tmp)
+   : "r"(haddr), "r"(laddr), "r"(hdata), "r"(ldata), "0"(tmp)
+  );
+}
 
-  /* disable interrupts during the following insn block */
-  asm("disi #5");
+static inline void write_program_word
+(uint16_t haddr, uint16_t laddr, uint16_t hdata, uint16_t ldata)
+{
+  /* write a 24 bits program word at addr with data */
+  /* note that the latch must be flushed to memory on a row basis */
 
-  /* write the key */
-  asm("mov #0x55, W0");
-  asm("mov W0, NVMKEY");
-  asm("mov #0xaa, W1");
-  asm("mov W1, NVMKEY");
+  __asm__ __volatile__
+  (
+   "mov %0, tblpag \n\t"
+   "tblwth %2, [ %1 ] \n\t"
+   "tblwtl %3, [ %1 ] \n\t"
+   :
+   : "r"(haddr), "r"(laddr), "r"(hdata), "r"(ldata)
+  );
+}
 
-  /* start erase sequence */
-  asm("bset NVMCOM, #15");
+static inline void erase_page
+(uint16_t addrhi, uint16_t addrlo)
+{
+  register uint16_t tmp;
 
-  /* see ref manual 5-1 example */
+  __asm__ __volatile__
+  (
+   "mov #0x4042, %0 \n\t"
+   "mov %3, NVMCON \n\t"
+
+   /* load page address */
+   "mov %1, TBLPAG \n\t"
+   "tblwtl %0, [ %2 ] \n\t"
+
+   /* disable interrupt for 5 next insns */
+   "disi #5 \n\t"
+
+   /* protection sequence */
+   "mov #0x55, %0 \n\t"
+   "mov %3, NVMKEY \n\t"
+   "mov #0xaa, %0 \n\t"
+   "mov %3, NVMKEY \n\t"
+
+   /* start erase sequence */
+   "bset NVMCOM, #15 \n\t"
+
+   /* wait for end of sequence */
 #if 1
-  asm("nop");
-  asm("nop");
+   "nop \n\t"
+   "nop \n\t"
 #else
-  asm("1: btsc NVMCON, #15");
-  asm("bra 1b");
+   "1: btsc NVMCON, #15 \n\t"
+   "bra 1b \n\t"
 #endif
 
-#if 0
-  asm("pop TBLPAG");
-#endif
+   : "=&r"(tmp)
+   : "r"(addrhi), "r"(addrlo), "0"(tmp)
+  );
 }
 
-static void read_mem
-(uint16_t hiaddr, uint16_t loaddr, uint16_t fu, uint16_t bar)
-{
-  /* read a flash page at {hi,lo}addr */
-
-  /* todo */
-}
-
-static inline void write_mem(void)
+static inline void flush_program_latches(void)
 {
   /* write one program memory row */
-  asm("mov #0x4001, W0");
-  asm("mov W0, NVMCON");
+  /* latches previously filled with write_program_word */
 
-  /* see erase_page */
-  asm("disi #5");
-  asm("mov #0x55, W0");
-  asm("mov W0, NVMKEY");
-  asm("mov #0xaa, W1");
-  asm("mov W1, NVMKEY");
-  asm("bset NVMCOM, #15");
-  asm("nop");
-  asm("nop");
-}
+  register uint16_t tmp;
 
-static inline void load_latches
-(uint16_t addrhi, uint16_t addrlo, uint16_t wordhi, uint16_t wordlo)
-{
-  /* w0 contains addrhi */
-  /* w1 contains addrlo */
-  /* w2 contains wordhi */
-  /* w3 contains wordlo */
-
-  asm("mov W0, TBLPAG");
-  asm("tblwtl W3, [W1]");
-  asm("tblwth W2, [W1]");
+  /* see erase_page for comments */
+  __asm__ __volatile__
+  (
+   "mov #0x4001, %0 \n\t"
+   "mov %1, NVMCON \n\t"
+   "disi #5 \n\t"
+   "mov #0x55, %0 \n\t"
+   "mov %1, NVMKEY \n\t"
+   "mov #0xaa, %0 \n\t"
+   "mov %1, NVMKEY \n\t"
+   "bset NVMCOM, #15 \n\t"
+#if 1
+   "nop \n\t"
+   "nop \n\t"
+#else
+   "1: btsc NVMCON, #15 \n\t"
+   "bra 1b \n\t"
+#endif
+   : "=&r"(tmp)
+   : "0"(tmp)
+  );
 }
 
 
@@ -361,7 +353,13 @@ static void read_process_cmd(void)
       if (size != PAGE_BYTE_COUNT)
       {
 	off = addr % PAGE_BYTE_COUNT;
-	read_page(HI(addr), LO(addr), HI(page_buf), LO(page_buf));
+
+	/* read 24 bits at a time */
+	for (i = 0; i < PAGE_BYTE_COUNT; i += 3)
+	{
+	  const uint32_t tmp = (uint32_t)(page_buf + i);
+	  read_mem(HI(addr), LO(addr), HI(tmp), LO(tmp));
+	}
       }
 
       /* erase page */
@@ -381,7 +379,7 @@ static void read_process_cmd(void)
 	/* fill the one row program memory buffer 3 bytes at a time */
 	for (j = 0; j < (ROW_BYTE_COUNT / 3); i += 3, j += 3, addr += 3)
 	{
-	  const uint32_t tmp = buf[i];
+	  const uint32_t tmp = *(uint32_t*)(buf + i);
 	  load_latches(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
 
@@ -404,6 +402,9 @@ static void read_process_cmd(void)
   case CMD_ID_READ_PROGRAM:
     {
       /* todo */
+
+      addr = read_uint32(cmd_buf + 1);
+      size = read_uint16(cmd_buf + 5);
 
       break ;
     }
