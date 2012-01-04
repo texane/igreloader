@@ -121,7 +121,7 @@ static inline void delay(void)
 
 /* communication layer */
 
-#define COM_FRAME_SIZE 8
+#define CMD_BUF_SIZE 8
 
 #if CONFIG_USE_ECAN
 
@@ -181,7 +181,7 @@ static void uart_write(uint8_t* s)
 {
   unsigned int i;
 
-  for (i = 0; i < COM_FRAME_SIZE; ++i, ++s)
+  for (i = 0; i < CMD_BUF_SIZE; ++i, ++s)
   {
     while (U1STAbits.UTXBF) ;
     U1TXREG = *s;
@@ -194,7 +194,7 @@ static void uart_read(uint8_t* s)
 
   unsigned int i;
 
-  for (i = 0; i < COM_FRAME_SIZE; ++i, ++s)
+  for (i = 0; i < CMD_BUF_SIZE; ++i, ++s)
   {
     while (U1STAbits.URXDA == 0) ;
     *s = U1RXREG;
@@ -368,7 +368,7 @@ static void read_process_cmd(void)
       erase_program_page(HI(addr), LO(addr));
 
       /* receive the page */
-      for (i = 0; i < size; i += COM_FRAME_SIZE)
+      for (i = 0; i < size; i += CMD_BUF_SIZE)
       {
 	com_read(page_buf + off + i);
 
