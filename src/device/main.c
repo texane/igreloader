@@ -238,7 +238,7 @@ static inline void write_program_word
   );
 }
 
-static inline void erase_page
+static inline void erase_program_page
 (uint16_t addrhi, uint16_t addrlo)
 {
   register uint16_t tmp;
@@ -358,12 +358,12 @@ static void read_process_cmd(void)
 	for (i = 0; i < PAGE_BYTE_COUNT; i += 3)
 	{
 	  const uint32_t tmp = (uint32_t)(page_buf + i);
-	  read_mem(HI(addr), LO(addr), HI(tmp), LO(tmp));
+	  read_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
       }
 
       /* erase page */
-      erase_page(HI(addr), LO(addr));
+      erase_program_page(HI(addr), LO(addr));
 
       /* receive the page */
       for (i = 0; i < size; i += COM_FRAME_SIZE)
@@ -380,11 +380,11 @@ static void read_process_cmd(void)
 	for (j = 0; j < (ROW_BYTE_COUNT / 3); i += 3, j += 3, addr += 3)
 	{
 	  const uint32_t tmp = *(uint32_t*)(buf + i);
-	  load_latches(HI(addr), LO(addr), HI(tmp), LO(tmp));
+	  write_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
 
-	/* write latches to memory */
-	write_mem();
+	/* finalize row write operation */
+	flush_program_latches();
       }
 
       /* todo: send page programming ack */
