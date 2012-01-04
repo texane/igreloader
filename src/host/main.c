@@ -16,6 +16,9 @@
    acts as a serial to CAN bridge.
  */
 
+/* todo: timeout version of com_read
+ */
+
 
 /* communication routines */
 
@@ -208,6 +211,25 @@ static int do_read
 }
 
 
+/* goto specified address */
+
+static int do_goto
+(
+ serial_handle_t* handle,
+ unsigned int bootid,
+ int ac, char** av
+)
+{
+  const uint32_t addr = strtoul(av[0], NULL, 16);
+  uint8_t cmd_buf[CMD_BUF_SIZE];
+
+  cmd_buf[0] = CMD_ID_GOTO;
+  write_uint32(cmd_buf + 1, addr);
+  if (com_write(handle, cmd_buf)) return -1;
+  return 0;
+}
+
+
 /* main */
 
 int main(int ac, char** av)
@@ -215,6 +237,7 @@ int main(int ac, char** av)
   /* command lines:
      ./a.out write <serial_device> <bootid> <file.hex>
      ./a.out read <serial_device> <bootid> <addr> <size>
+     ./a.out goto <serial_device> <bootid> <addr>
    */
 
   const char* const what = av[1];
@@ -242,6 +265,14 @@ int main(int ac, char** av)
     if (do_read(&handle, bootid, ac - 4, av + 4) == -1)
     {
       printf("do_read() == -1\n");
+      goto on_error;
+    }
+  }
+  else if (strcmp(what, "goto") == 0)
+  {
+    if (do_goto(&handle, bootid, ac - 4, av + 4) == -1)
+    {
+      printf("do_goto() == -1\n");
       goto on_error;
     }
   }

@@ -27,15 +27,14 @@ typedef unsigned long uint32_t;
 # define CONFIG_USE_UART 1
 #endif
 
-#define CONFIG_BOOT_ID 2 
-
 #define CONFIG_USE_LENDIAN 1
 
 
+#if 0 /* todo */
 /* software reset value */
 /* todo: put at a special location */
-
 static uint16_t is_soft_reset = 0;
+#endif /* todo */
 
 
 /* oscillator */
@@ -67,6 +66,8 @@ static void osc_setup(void)
 
 static inline uint8_t get_boot_id(void)
 {
+#define CONFIG_BOOT_ID 2
+
 #if defined(CONFIG_BOOT_ID)
   return CONFIG_BOOT_ID;
 #else
@@ -78,10 +79,16 @@ static inline uint8_t get_boot_id(void)
 
 /* goto user code entrypoint */
 
-static inline void call_user_code(void)
+static inline void go_to(uint16_t addr)
 {
-  /* todo */
-  while (1) ;
+  __asm__ __volatile__
+  (
+   "goto %0 \n\t"
+   :
+   : "r"(addr)
+  );
+
+  /* never reached */
 }
 
 
@@ -434,12 +441,11 @@ static void read_process_cmd(void)
       break ;
     }
 
-  case CMD_ID_GO:
+  case CMD_ID_GOTO:
     {
       /* jump to the entrypoint */
-
-      call_user_code();
-
+      addr = read_uint32(cmd_buf + 1);
+      go_to(LO(addr));
       break ;
     }
 
@@ -452,12 +458,14 @@ static void read_process_cmd(void)
 
 int main(void)
 {
+#if 0 /* todo */
   /* look for soft reset */
   if (is_soft_reset)
   {
     is_soft_reset = 0;
-    call_user_code();
+    go_to();
   }
+#endif /* todo */
 
   osc_setup();
 
