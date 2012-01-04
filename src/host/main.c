@@ -1,4 +1,8 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <sys/types.h>
 #include "dev.h"
 #include "hex.h"
 #include "lendian.h"
@@ -7,9 +11,13 @@
 
 /* write hex file to device memory */
 
-static int do_program(void* dev, const char* filename)
+static int do_program
+(
+ void* dev, unsigned int bootid,
+ int ac, char** av
+)
 {
-  /* filename a hex file */
+  const char* const filename = av[0];
 
   hex_range_t* ranges;
   hex_range_t* pos;
@@ -88,22 +96,89 @@ static int do_program(void* dev, const char* filename)
 }
 
 
+/* read program memory */
+
+static int do_read
+(
+ void* dev, unsigned int bootid,
+ int ac, char** av
+)
+{
+  const uint32_t addr = strtoul(av[0], NULL, 16);
+  const uint16_t size = strtoul(av[1], NULL, 10);
+  uint8_t* read_buf = NULL;
+  uint8_t cmd_buf[8];
+  int err = -1;
+  size_t i;
+
+  /* todo: validate addr (alignment, not reserved) */
+  /* todo: check size */
+
+  /* allocate a bit larger to avoid overflow on last read */
+  read_buf = malloc(size + sizeof(cmd_buf));
+  if (read_buf == NULL) goto on_error;
+
+  cmd_buf[0] = CMD_ID_READ_PROGRAM;
+  write_uint32(cmd_buf + 1, addr);
+  write_uint16(cmd_buf + 5, addr);
+  /* todo: com_send(cmd_buf) */
+
+  /* read 2 24 bits words per frame */
+  for (i = 0; i < size; i += 6)
+  {
+    /* todo: com_read(read_buf + i); */
+    /* todo: ack */
+  }
+
+  /* print the buffer */
+  for (i = 0; i < size; ++i) printf(" %02x", read_buf[i]);
+  printf("\n");
+
+  /* success */
+  err = 0;
+
+ on_error:
+  if (read_buf != NULL) free(read_buf);
+
+  return err;
+}
+
+
 /* main */
 
 int main(int ac, char** av)
 {
-  /* command line: ./a.out <device> <file.hex> */
+  /* command lines:
+     ./a.out write <serial_device> <bootid> <file.hex>
+     ./a.out read <serial_device> <bootid> <addr> <size>
+   */
 
-  const char* const devname = av[1];
-  const char* const filename = av[2];
+  const char* const what = av[1];
+  const char* const devname = av[2];
+  const unsigned int bootid = atoi(av[3]);
 
   /* todo: initialize serial */
 
   /* program device flash */
-  if (do_program(NULL, filename) == -1)
+  if (strcmp(what, "write") == 0)
   {
-    printf("programming failed\n");
-    return -1;
+    if (do_program(NULL, bootid, ac - 4, av + 4) == -1)
+    {
+      printf("do_program() == -1\n");
+      return -1;
+    }
+  }
+  else if (strcmp(what, "read") == 0)
+  {
+    if (do_read(NULL, bootid, ac - 4, av + 4) == -1)
+    {
+      printf("do_read() == -1\n");
+      return -1;
+    }
+  }
+  else
+  {
+    printf("%s: invalid command\n", what);
   }
 
   return 0;
