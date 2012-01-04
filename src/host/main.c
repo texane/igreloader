@@ -6,14 +6,70 @@
 #include "dev.h"
 #include "hex.h"
 #include "lendian.h"
+#include "serial.h"
 #include "../common/common.h"
+
+
+/* todo: once testing done, messages should
+   CAN frame info should directly be wrapped
+   into a serial frame so that the endpoint
+   acts as a serial to CAN bridge.
+ */
+
+
+/* communication routines */
+
+static int com_init(serial_handle_t* handle, const char* devname)
+{
+  static const serial_conf_t conf = { 9600, 8, SERIAL_PARITY_DISABLED, 1 };
+
+  if (serial_open(handle, devname) == -1)
+  {
+    printf("serial_open(%s) == -1\n", devname);
+    return -1;
+  }
+
+  if (serial_set_conf(handle, &conf) == -1)
+  {
+    printf("serial_set_conf() == -1\n");
+    serial_close(handle);
+    return -1;
+  }
+
+  return 0;
+}
+
+static void com_close(serial_handle_t* handle)
+{
+  serial_close(handle);
+}
+
+static int com_write(serial_handle_t* handle, const uint8_t* buf)
+{
+  size_t size = CMD_BUF_SIZE;
+  size_t tmp = 0;
+
+  for (; size; size -= tmp)
+  {
+    if (serial_write(handle, buf, size, &tmp))
+      break ;
+  }
+
+  return (size == 0) ? 0 : -1;
+}
+
+static int com_read(serial_handle_t* handle, uint8_t* buf)
+{
+  return serial_readn(handle, buf, CMD_BUF_SIZE);
+}
 
 
 /* write hex file to device memory */
 
 static int do_program
 (
- void* dev, unsigned int bootid,
+ serial_handle_t* handle,
+ unsigned int bootid,
  int ac, char** av
 )
 {
@@ -25,7 +81,7 @@ static int do_program
   size_t off;
   size_t i;
   size_t page_size;
-  uint8_t buf[8];
+  uint8_t buf[CMD_BUF_SIZE];
 
   if (hex_read_ranges(filename, &ranges) == -1)
   {
@@ -62,26 +118,27 @@ static int do_program
       page_size = FLASH_PAGE_SIZE;
       if ((off + page_size) > pos->size) page_size = pos->size - off;
 
-      /* todo: check device addr range */
-
       /* initiate write sequence */
       buf[0] = CMD_ID_WRITE_PROGRAM;
       write_uint32(buf + 1, pos->addr + off);
       write_uint16(buf + 5, page_size);
 
-      /* todo: com_send(dev, buf); */
+      if (com_write(handle, buf)) goto on_error;
 
-      /* todo: wait for command ack */
+      /* command ack */
+      if (com_read(handle, buf)) goto on_error;
 
       /* send the page 8 bytes at a time */
       for (i = 0; i < pos->size; i += 8)
       {
-	/* todo: com_send(dev, pos->buf + off + i); */
+	if (com_write(handle, pos->buf + off + i)) goto on_error;
 
-	/* todo: wait for data ack */
+	/* frame ack */
+	if (com_read(handle, buf)) goto on_error;
       }
 
-      /* todo: wait for page programming ack */
+      /* page programming ack */
+      if (com_read(handle, buf)) goto on_error;
 
       /* next page or done */
       off += page_size;
@@ -100,14 +157,15 @@ static int do_program
 
 static int do_read
 (
- void* dev, unsigned int bootid,
+ serial_handle_t* handle,
+ unsigned int bootid,
  int ac, char** av
 )
 {
   const uint32_t addr = strtoul(av[0], NULL, 16);
   const uint16_t size = strtoul(av[1], NULL, 10);
   uint8_t* read_buf = NULL;
-  uint8_t cmd_buf[8];
+  uint8_t cmd_buf[CMD_BUF_SIZE];
   int err = -1;
   size_t i;
 
@@ -121,13 +179,19 @@ static int do_read
   cmd_buf[0] = CMD_ID_READ_PROGRAM;
   write_uint32(cmd_buf + 1, addr);
   write_uint16(cmd_buf + 5, addr);
-  /* todo: com_send(cmd_buf) */
+
+  if (com_write(handle, cmd_buf)) goto on_error;
+
+  /* command ack */
+  if (com_read(handle, cmd_buf)) goto on_error;
 
   /* read 2 24 bits words per frame */
   for (i = 0; i < size; i += 6)
   {
-    /* todo: com_read(read_buf + i); */
-    /* todo: ack */
+    if (com_read(handle, read_buf + i)) goto on_error;
+
+    /* frame ack */
+    if (com_write(handle, cmd_buf)) goto on_error;
   }
 
   /* print the buffer */
@@ -156,30 +220,39 @@ int main(int ac, char** av)
   const char* const what = av[1];
   const char* const devname = av[2];
   const unsigned int bootid = atoi(av[3]);
+  serial_handle_t handle;
 
-  /* todo: initialize serial */
+  if (com_init(&handle, devname) == -1)
+  {
+    printf("com_init(%s) == -1\n", devname);
+    goto on_error;
+  }
 
   /* program device flash */
   if (strcmp(what, "write") == 0)
   {
-    if (do_program(NULL, bootid, ac - 4, av + 4) == -1)
+    if (do_program(&handle, bootid, ac - 4, av + 4) == -1)
     {
       printf("do_program() == -1\n");
-      return -1;
+      goto on_error;
     }
   }
   else if (strcmp(what, "read") == 0)
   {
-    if (do_read(NULL, bootid, ac - 4, av + 4) == -1)
+    if (do_read(&handle, bootid, ac - 4, av + 4) == -1)
     {
       printf("do_read() == -1\n");
-      return -1;
+      goto on_error;
     }
   }
   else
   {
     printf("%s: invalid command\n", what);
+    goto on_error;
   }
+
+ on_error:
+  com_close(&handle);
 
   return 0;
 }
