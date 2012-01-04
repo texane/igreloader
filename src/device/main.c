@@ -401,10 +401,27 @@ static void read_process_cmd(void)
 
   case CMD_ID_READ_PROGRAM:
     {
-      /* todo */
-
       addr = read_uint32(cmd_buf + 1);
       size = read_uint16(cmd_buf + 5);
+
+      /* assume addr is aligned on program word boundary */
+      /* assume size is a multiple of word size */
+
+      while (size)
+      {
+	/* fill cmd_buffer[0:5] */
+	for (i = 0; size && (i < 6); i += 3, addr += 3, size -= 3)
+	{
+	  const uint32_t tmp = (uint32_t)(cmd_buf + i);
+	  read_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
+	}
+
+	com_send(cmd_buf);
+
+	/* todo: wait for ack */
+      }
+
+      /* todo: end of read packet */
 
       break ;
     }
