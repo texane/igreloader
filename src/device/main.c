@@ -347,7 +347,8 @@ static void read_process_cmd(void)
       addr = read_uint32(cmd_buf + 1);
       size = read_uint16(cmd_buf + 5);
 
-      /* todo: send command ack */
+      /* command ack */
+      com_write(cmd_buf);
 
       /* read the page before erasing, if not a full page. */
       off = 0;
@@ -371,7 +372,8 @@ static void read_process_cmd(void)
       {
 	com_read(page_buf + off + i);
 
-	/* todo: send data ack */
+	/* frame ack */
+	com_write(cmd_buf);
       }
 
       /* write a whole page. i incremented by inner loop */
@@ -388,7 +390,8 @@ static void read_process_cmd(void)
 	flush_program_latches();
       }
 
-      /* todo: send page programming ack */
+      /* page programming ack */
+      com_write(cmd_buf);
 
       break ;
     }
@@ -408,6 +411,9 @@ static void read_process_cmd(void)
       /* assume addr is aligned on program word boundary */
       /* assume size is a multiple of word size */
 
+      /* command ack */
+      com_write(cmd_buf);
+
       while (size)
       {
 	/* fill cmd_buffer[0:5] */
@@ -417,12 +423,11 @@ static void read_process_cmd(void)
 	  read_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
 
-	com_send(cmd_buf);
+	com_write(cmd_buf);
 
-	/* todo: wait for ack */
+	/* frame ack */
+	com_read(cmd_buf);
       }
-
-      /* todo: end of read packet */
 
       break ;
     }
