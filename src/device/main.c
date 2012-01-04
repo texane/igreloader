@@ -207,7 +207,7 @@ static inline void read_program_word
   (
    "mov %0, TBLPAG \n\t"
    "tblrdl [ %1 ], [ %2++ ] \n\t"
-   "tblrdh.b [ %1 ], [ %2 ] \n\t"
+   "tblrdh [ %1 ], [ %2 ] \n\t"
    :
    : "r"(haddr), "r"(laddr), "r"(data)
   );
@@ -304,13 +304,10 @@ static inline void flush_program_latches(void)
 
 static void read_process_cmd(void)
 {
-#define ROW_INSN_COUNT 64
-#define ROW_BYTE_COUNT (ROW_INSN_COUNT * 3)
-#define PAGE_INSN_COUNT 512
-#define PAGE_BYTE_COUNT (PAGE_INSN_COUNT * 3)
-
-#define ROW_BYTE_SIZE 192
-#define PAGE_BYTE_SIZE 1536
+#define ROW_WORD_SIZE 64
+#define ROW_BYTE_SIZE (ROW_WORD_SIZE * 4) /* 256 */
+#define PAGE_WORD_SIZE 512
+#define PAGE_BYTE_SIZE (PAGE_WORD_SIZE * 4) /* 2048 */
 
   /* CMD_BUF_SIZE added to avoid overflow in com_read */
   uint8_t page_buf[PAGE_BYTE_SIZE + CMD_BUF_SIZE];
@@ -324,7 +321,7 @@ static void read_process_cmd(void)
 
   com_read(cmd_buf);
 
-  switch (read_uint8(cmd_buf + 0))
+  switch (cmd_buf[0])
   {
   case CMD_ID_WRITE_PROGRAM:
     {
@@ -337,15 +334,19 @@ static void read_process_cmd(void)
       /* command ack */
       com_write(cmd_buf);
 
-      /* read the page before erasing, if not a full page. */
+      /* read the page before erasing, if not a full page */
       off = 0;
       if (size != PAGE_BYTE_SIZE)
       {
 	off = addr % PAGE_BYTE_SIZE;
+	addr -= off;
 
-	/* read 24 bits at a time */
-	for (i = 0; i < PAGE_BYTE_SIZE; i += 3)
-	  read_program_word(HI(addr), LO(addr), (uint16_t)&page_buf[i]);
+	/* read one insn at a time */
+	for (i = 0, j = 0; i < PAGE_BYTE_SIZE; i += 4, j += 2)
+	{
+	  const uint32_t tmp = (uint32_t)(addr + j);
+	  read_program_word(HI(tmp), LO(tmp), (uint16_t)(page_buf + i));
+	}
       }
 
       /* erase page */
@@ -361,12 +362,12 @@ static void read_process_cmd(void)
       }
 
       /* write a whole page. i incremented by inner loop */
-      for (i = 0; i < PAGE_BYTE_COUNT; )
+      for (i = 0; i < PAGE_BYTE_SIZE; )
       {
-	/* fill the one row program memory buffer 3 bytes at a time */
-	for (j = 0; j < (ROW_BYTE_COUNT / 3); i += 3, j += 3, addr += 3)
+	/* fill the one row program memory latch one word at a time */
+	for (j = 0; j < ROW_WORD_SIZE; i += 4, ++j, addr += 2)
 	{
-	  /* does not compile with -O2 */
+	  /* todo: fix with -O2 */
 	  const uint32_t tmp = *(uint32_t*)(page_buf + i);
 	  write_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
@@ -390,6 +391,9 @@ static void read_process_cmd(void)
 
   case CMD_ID_READ_PROGRAM:
     {
+      /* addr the first program word */
+      /* size the program word count to read */
+
       addr = read_uint32(cmd_buf + 1);
       size = read_uint16(cmd_buf + 5);
 
@@ -401,8 +405,8 @@ static void read_process_cmd(void)
 
       while (size)
       {
-	/* fill cmd_buffer[0:5] */
-	for (i = 0; size && (i < 6); i += 3, addr += 3, size -= 3)
+	/* read 2 program insn at a time */
+	for (j = 0, i = 0; size && i < CMD_BUF_SIZE; i += 4, addr += 2, size -= 1)
 	{
 #if 1
 	  read_program_word(HI(addr), LO(addr), (uint16_t)cmd_buf + i);
