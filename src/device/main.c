@@ -206,7 +206,7 @@ static inline void read_program_word
   __asm__ __volatile__
   (
    "mov %0, TBLPAG \n\t"
-   "tblrdl [ %1 ], [ %2 ] \n\t"
+   "tblrdl [ %1 ], [ %2++ ] \n\t"
    "tblrdh.b [ %1 ], [ %2 ] \n\t"
    :
    : "r"(haddr), "r"(laddr), "r"(data)
@@ -309,10 +309,13 @@ static void read_process_cmd(void)
 #define PAGE_INSN_COUNT 512
 #define PAGE_BYTE_COUNT (PAGE_INSN_COUNT * 3)
 
-  /* 8 is added to avoid overflow in com_read */
-  static uint8_t page_buf[PAGE_BYTE_COUNT + 8] __attribute__((aligned));
+#define ROW_BYTE_SIZE 192
+#define PAGE_BYTE_SIZE 1536
 
-  uint8_t cmd_buf[8] __attribute__((aligned));
+  /* CMD_BUF_SIZE added to avoid overflow in com_read */
+  uint8_t page_buf[PAGE_BYTE_SIZE + CMD_BUF_SIZE];
+
+  uint8_t cmd_buf[CMD_BUF_SIZE];
   uint32_t addr;
   uint16_t size;
   uint16_t off;
@@ -326,6 +329,7 @@ static void read_process_cmd(void)
   case CMD_ID_WRITE_PROGRAM:
     {
       /* write a program page */
+      /* note that addr and size are in words, not bytes */
 
       addr = read_uint32(cmd_buf + 1);
       size = read_uint16(cmd_buf + 5);
@@ -335,12 +339,12 @@ static void read_process_cmd(void)
 
       /* read the page before erasing, if not a full page. */
       off = 0;
-      if (size != PAGE_BYTE_COUNT)
+      if (size != PAGE_BYTE_SIZE)
       {
-	off = addr % PAGE_BYTE_COUNT;
+	off = addr % PAGE_BYTE_SIZE;
 
 	/* read 24 bits at a time */
-	for (i = 0; i < PAGE_BYTE_COUNT; i += 3)
+	for (i = 0; i < PAGE_BYTE_SIZE; i += 3)
 	  read_program_word(HI(addr), LO(addr), (uint16_t)&page_buf[i]);
       }
 
