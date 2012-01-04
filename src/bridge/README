@@ -1,0 +1,12 @@
+serial to CAN bridge.
+
+the device is put into listenall mode.
+
+it forwards whatever packet is receives on the
+serial endpoint to the CAN bus. The CAN message
+id is the first byte of the serial frame. The
+remaining buffer is CAN payload.
+
+it forwards every frame got on the CAN link to
+the serial endpoint by appending the CAN ID to
+the serial frame, as explained above.
