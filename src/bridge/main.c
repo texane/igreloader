@@ -155,6 +155,7 @@ int main(void)
 {
   uint8_t buf[CAN_DATA_SIZE];
   uint16_t id;
+  unsigned int do_sleep;
 
   osc_setup();
   uart_setup();
@@ -162,18 +163,25 @@ int main(void)
 
   while (1)
   {
-    /* todo: sleep mode, awake on interrupt */
+    do_sleep = 1;
 
     if (uart_is_rx())
     {
+      do_sleep = 0;
       uart_read(&id, buf);
       ecan_write(id, buf);
     }
 
     if (ecan_is_rx())
     {
+      do_sleep = 0;
       ecan_read(&id, buf);
       uart_write(id, buf);
+    }
+
+    if (do_sleep)
+    {
+      /* todo: enter sleep mode */
     }
   }
 
