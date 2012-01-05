@@ -421,7 +421,7 @@ static void read_process_cmd(void)
   case CMD_ID_STATUS:
     {
       /* todo: reply status */
-
+      com_write(cmd_buf);
       break ;
     }
 

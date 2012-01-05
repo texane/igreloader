@@ -2,7 +2,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <sys/types.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include "dev.h"
 #include "hex.h"
 #include "lendian.h"
@@ -64,6 +67,33 @@ static int com_write(serial_handle_t* handle, const uint8_t* buf)
 static inline int com_read(serial_handle_t* handle, uint8_t* buf)
 {
   return serial_readn(handle, buf, CMD_BUF_SIZE);
+}
+
+static inline int com_read_timeout
+(serial_handle_t* handle, uint8_t* buf, unsigned int ms)
+{
+  /* ms the timeout, in milliseconds */
+  /* return -2 on timeout */
+
+  struct timeval tm;
+  int err;
+  fd_set fds;
+
+  tm.tv_sec = ms / 1000;
+  tm.tv_usec = 1000 * (ms % 1000);
+
+  FD_ZERO(&fds);
+  FD_SET(handle->fd, &fds);
+  
+  err = select(handle->fd + 1, &fds, NULL, NULL, &tm);
+  if (err == 1)
+  {
+    /* no timeout */
+    return com_read(handle, buf);
+  }
+
+  /* timeout or error */
+  return err == 0 ? -2 : -1;
 }
 
 
@@ -303,9 +333,41 @@ static int do_status
  unsigned int bootid
 )
 {
-  /* todo */
   /* bootid the device id or (unsigned int)-1 for all */
-  return 0;
+
+  uint8_t bootids[16];
+  uint8_t buf[CMD_BUF_SIZE];
+  unsigned int i;
+  unsigned int n;
+  int err = -1;
+  int ret;
+
+  if (bootid == (unsigned int)-1)
+  {
+    n = sizeof(bootids) / sizeof(bootids[0]);
+    for (i = 0; i < n; ++i) bootids[i] = (uint8_t)i;
+  }
+  else
+  {
+    n = 1;
+    bootids[0] = (uint8_t)bootid;
+  }
+
+  for (i = 0; i < n; ++i)
+  {
+    buf[0] = CMD_ID_STATUS;
+    buf[1] = (uint8_t)bootids[i];
+    if (com_write(handle, buf)) goto on_error;
+    ret = com_read_timeout(handle, buf, 1000);
+    if (ret == -1) goto on_error;
+    printf("device %02x: %c\n", bootids[i], ret == -2 ? 'x' : '!');
+  }
+
+  /* success */
+  err = 0;
+
+ on_error:
+  return err;
 }
 
 
