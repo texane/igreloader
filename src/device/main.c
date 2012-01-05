@@ -302,6 +302,16 @@ static inline void flush_program_latches(void)
 
 /* commands */
 
+static inline uint16_t read_uint16_unaligned(uint8_t* p)
+{
+  return ((uint16_t)p[1] << 8) | p[0];
+}
+
+static inline uint32_t read_uint32_unaligned(uint8_t* p)
+{
+  return ((*(uint32_t*)(p + 1)) << 8) | p[0];
+}
+
 static void read_process_cmd(void)
 {
 #define ROW_WORD_COUNT 64
@@ -328,8 +338,8 @@ static void read_process_cmd(void)
       /* write a program page */
       /* note that addr and size are in words, not bytes */
 
-      addr = read_uint32(cmd_buf + 1);
-      size = read_uint16(cmd_buf + 5);
+      addr = read_uint32_unaligned(cmd_buf + 1);
+      size = read_uint16_unaligned(cmd_buf + 5);
 
       /* command ack */
       com_write(cmd_buf);
@@ -387,8 +397,8 @@ static void read_process_cmd(void)
       /* addr the first program word */
       /* size the program word count to read */
 
-      addr = read_uint32(cmd_buf + 1);
-      size = read_uint16(cmd_buf + 5);
+      addr = read_uint32_unaligned(cmd_buf + 1);
+      size = read_uint16_unaligned(cmd_buf + 5);
 
       /* assume addr is aligned on program word boundary */
       /* assume size is a multiple of program word size */
@@ -407,12 +417,12 @@ static void read_process_cmd(void)
 	  const uint32_t tmp = (uint16_t)&cmd_buf[i];
 	  read_program_word(HI(addr), LO(addr), tmp);
 #endif
+
+	  com_write(cmd_buf);
+
+	  /* frame ack */
+	  com_read(cmd_buf);
 	}
-
-	com_write(cmd_buf);
-
-	/* frame ack */
-	com_read(cmd_buf);
       }
 
       break ;
@@ -428,7 +438,7 @@ static void read_process_cmd(void)
   case CMD_ID_GOTO:
     {
       /* jump to the entrypoint */
-      addr = read_uint32(cmd_buf + 1);
+      addr = read_uint32_unaligned(cmd_buf + 1);
       go_to(LO(addr));
       break ;
     }
