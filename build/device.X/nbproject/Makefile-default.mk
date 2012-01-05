@@ -77,8 +77,8 @@ MP_AR_DIR="/opt/microchip/mplabc30/v3.30c/bin"
 .build-conf:  ${BUILD_SUBPROJECTS}
 	${MAKE}  -f nbproject/Makefile-default.mk dist/${CND_CONF}/${IMAGE_TYPE}/device.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
 
-MP_PROCESSOR_OPTION=33FJ128GP804
-MP_LINKER_FILE_OPTION=,-Tp33FJ128GP804.gld
+MP_PROCESSOR_OPTION=33FJ128GP802
+MP_LINKER_FILE_OPTION=,-Tp33FJ128GP802.gld
 # ------------------------------------------------------------------------------------
 # Rules for buildStep: assemble
 ifeq ($(TYPE_IMAGE), DEBUG_RUN)

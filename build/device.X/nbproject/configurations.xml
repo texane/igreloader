@@ -34,7 +34,7 @@
     <conf name="default" type="2">
       <toolsSet>
         <developmentServer>localhost</developmentServer>
-        <targetDevice>dsPIC33FJ128GP804</targetDevice>
+        <targetDevice>dsPIC33FJ128GP802</targetDevice>
         <targetHeader></targetHeader>
         <platformTool>PICkit2PlatformTool</platformTool>
         <languageToolchain>C30</languageToolchain>
@@ -84,12 +84,12 @@
       </C30-LD>
       <C30Global>
         <property key="fast-math" value="false"/>
-        <property key="output-file-format" value="elf"/>
         <property key="legacy-libc" value="false"/>
+        <property key="output-file-format" value="elf"/>
       </C30Global>
       <PICkit2PlatformTool>
         <property key="pk2settings.userpgmexec" value="true"/>
-        <property key="pk2settings.setvddvoltage" value="${pk2settings.setvddvoltage}"/>
+        <property key="pk2settings.setvddvoltage" value="3.25"/>
         <property key="pk2settings.3state" value="false"/>
         <property key="pk2settings.preserveee" value="false"/>
         <property key="pk2settings.usetargetpower" value="false"/>
