@@ -1,6 +1,16 @@
 #include <p33Fxxxx.h>
 
 
+/* TODO
+   idle mode requires data to be processed
+   in the interrupt handler. in polling mode
+   race may occur between checking for data
+   availability and pwrsav instruction, and
+   the cpu would idle forever.
+ */
+#define CONFIG_USE_IDLE 0
+
+
 /* notes
    UART wraps CAN frames using the following format:
    <CAN_ID:2>,<CAN_PAYLOAD:8>
@@ -131,12 +141,16 @@ static inline unsigned int ecan_is_rx(void)
 
 /* uart */
 
+#if CONFIG_USE_IDLE
+
 void __attribute__((__interrupt__, no_auto_psv)) _U1RXInterrupt(void)
 {
   /* data not processed here. only used to leave idle mode. */
   IFS0bits.U1RXIF = 0;
   return ;
 }
+
+#endif
 
 static void uart_setup(void)
 {
@@ -164,9 +178,11 @@ static void uart_setup(void)
   U1MODEbits.UARTEN = 1;
   U1STAbits.UTXEN = 1;
 
+#if CONFIG_USE_IDLE
   IFS0bits.U1RXIF = 0;
   IPC2bits.U1RXIP = 3;
   IEC0bits.U1RXIE = 1;
+#endif
 }
 
 static inline void uart_write_uint8(uint8_t x)
@@ -211,15 +227,23 @@ static void uart_read(uint16_t* id, uint8_t* s)
 }
 
 
+#if CONFIG_USE_IDLE
+
 /* enter idle mode */
 
 static inline void idle(void)
 {
   __asm__ __volatile__
   (
+   "disi #3 \n\t"
+   "bts U1STA, #URXDA \n\t"
+   "bs skip_idle \n\t"
    "pwrsav #1 \n\t"
+   "skip_idle:\n\t"
   );
 }
+
+#endif
 
 
 /* main */
@@ -235,8 +259,9 @@ int main(void)
 
   while (1)
   {
+#if CONFIG_USE_IDLE
     idle();
-
+#else
     if (uart_is_rx())
     {
       uart_read(&id, buf);
@@ -248,6 +273,7 @@ int main(void)
       ecan_read(&id, buf);
       uart_write(id, buf);
     }
+#endif
   }
 
   return 0;
