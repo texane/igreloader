@@ -1,25 +1,6 @@
 #include <p33Fxxxx.h>
 
 
-/* TODO
-   idle mode requires data to be processed
-   in the interrupt handler. in polling mode
-   race may occur between checking for data
-   availability and pwrsav instruction, and
-   the cpu would idle forever.
- */
-
-#define CONFIG_USE_IDLE 0
-
-
-/* notes
-   UART wraps CAN frames using the following format:
-   <CAN_ID:2>,<CAN_PAYLOAD:8>
- */
-
-#define CAN_DATA_SIZE 8
-
-
 /* configuration bits */
 
 _FOSCSEL(FNOSC_FRCPLL);
@@ -33,6 +14,19 @@ _FBS(BWRP_WRPROTECT_OFF);
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned long uint32_t;
+
+
+/* polling or interrupt */
+
+#define CONFIG_USE_INTERRUPT 0
+
+
+/* notes
+   UART wraps CAN frames using the following format:
+   <CAN_ID:2>,<CAN_PAYLOAD:8>
+ */
+
+#define CAN_DATA_SIZE 8
 
 
 /* oscillator */
@@ -62,9 +56,11 @@ static void osc_setup(void)
 
 uint16_t ecan_bufs[4][8] __attribute__((space(dma), aligned(16)));
 
-#if 0 /* todo, ecan interrupt handler */
+#if CONFIG_USE_INTERRUPT
 
 static inline unsigned int ecan_is_rx(void);
+static void ecan_read(unsigned int, uint16_t*, uint8_t*);
+static void uart_write(uint16_t, uint8_t*);
 
 void __attribute__((interrupt, no_auto_psv)) _C1Interrupt(void)
 {
@@ -75,13 +71,14 @@ void __attribute__((interrupt, no_auto_psv)) _C1Interrupt(void)
 
   if (C1INTFbits.RBIF)
   {
-#if 0 /* todo */
     const unsigned int buf_index = ecan_is_rx();
     if (buf_index)
     {
+      static uint8_t buf[CAN_DATA_SIZE];
+      uint16_t id;
       ecan_read(buf_index, &id, buf);
+      uart_write(id, buf);
     }
-#endif /* todo */
 
     C1INTFbits.RBIF = 0;
   }
@@ -89,7 +86,7 @@ void __attribute__((interrupt, no_auto_psv)) _C1Interrupt(void)
   IFS2bits.C1IF = 0;
 }
 
-#endif /* todo, ecan interrupt handler */
+#endif /* CONFIG_USE_INTERRUPT */
 
 static void ecan_setup(void)
 {
@@ -183,7 +180,7 @@ static void ecan_setup(void)
   DMA2STA = __builtin_dmaoffset(&ecan_bufs);
   DMA2CONbits.CHEN = 1;
 
-#if 0 /* setup interrupts */
+#if CONFIG_USE_INTERRUPT
   IEC2bits.C1IE = 1;
   C1INTEbits.TBIE = 1;
   C1INTEbits.RBIE = 1;
@@ -242,13 +239,23 @@ static void ecan_read(unsigned int buf_index, uint16_t* id, uint8_t* s)
 
 /* uart */
 
-#if CONFIG_USE_IDLE
+#if CONFIG_USE_INTERRUPT
+
+static void uart_read(uint16_t*, uint8_t*);
+static inline unsigned int uart_is_rx(void);
 
 void __attribute__((__interrupt__, no_auto_psv)) _U1RXInterrupt(void)
 {
-  /* data not processed here. only used to leave idle mode. */
+  static uint8_t buf[CAN_DATA_SIZE];
+  uint16_t id;
+
+  if (uart_is_rx())
+  {
+    uart_read(&id, buf);
+    ecan_write(id, buf);
+  }
+
   IFS0bits.U1RXIF = 0;
-  return ;
 }
 
 #endif
@@ -279,7 +286,7 @@ static void uart_setup(void)
   U1MODEbits.UARTEN = 1;
   U1STAbits.UTXEN = 1;
 
-#if CONFIG_USE_IDLE
+#if CONFIG_USE_INTERRUPT
   IFS0bits.U1RXIF = 0;
   IPC2bits.U1RXIP = 3;
   IEC0bits.U1RXIE = 1;
@@ -328,7 +335,7 @@ static void uart_read(uint16_t* id, uint8_t* s)
 }
 
 
-#if CONFIG_USE_IDLE
+#if CONFIG_USE_INTERRUPT
 
 /* enter idle mode */
 
@@ -336,24 +343,22 @@ static inline void idle(void)
 {
   __asm__ __volatile__
   (
-   "disi #3 \n\t"
-   "bts U1STA, #URXDA \n\t"
-   "bs skip_idle \n\t"
    "pwrsav #1 \n\t"
-   "skip_idle:\n\t"
   );
 }
 
-#endif
+#endif /* CONFIG_USE_INTERRUPT */
 
 
 /* main */
 
 int main(void)
 {
+#if (CONFIG_USE_INTERRUPT == 0)
   uint8_t buf[CAN_DATA_SIZE];
   uint16_t id;
   unsigned int buf_index;
+#endif
 
   osc_setup();
   uart_setup();
@@ -361,9 +366,9 @@ int main(void)
 
   while (1)
   {
-#if CONFIG_USE_IDLE
+#if CONFIG_USE_INTERRUPT
     idle();
-#else
+#else /* polling */
     if (uart_is_rx())
     {
       uart_read(&id, buf);
