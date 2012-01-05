@@ -4,10 +4,11 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+
+#define CONFIG_SERIAL_DEBUG 0
 #include "serial.h"
 
 
-#define CONFIG_SERIAL_DEBUG 0
 #if CONFIG_SERIAL_DEBUG
 # define DEBUG_ENTER() printf("[>] %s\n", __FUNCTION__)
 # define DEBUG_LEAVE() printf("[<] %s\n", __FUNCTION__)
@@ -106,8 +107,6 @@ static int speed_t_to_conf(speed_t s, serial_conf_t* c)
 {
 
 #define SPEED_BAUDS_CASE(n) case B ## n: c->bauds = n; break
-
-  printf(">>> %x\n", s);
 
   switch (s & (0x20 - 1))
     {
@@ -242,13 +241,14 @@ int serial_set_conf(serial_handle_t* h,
 
   memset(&termios, 0, sizeof(struct termios));
 
-  if (!(termios.c_ispeed = conf_to_speed_t(c)))
+  if (!(termios.c_cflag = conf_to_speed_t(c)))
     {
       DEBUG_ERROR("conf_to_speed_t()\n");
       goto on_error;
     }
 
-  termios.c_ospeed = termios.c_ispeed;
+  termios.c_ispeed = termios.c_cflag;
+  termios.c_ospeed = termios.c_cflag;
 
   if (tcsetattr(h->fd, TCSANOW, &termios) == -1)
     {
