@@ -51,7 +51,64 @@ static void osc_setup(void)
 
 static void ecan_setup(void)
 {
-  /* todo: configure in listenall mode */
+  /* baud rate */
+#define FCAN 40000000 
+#define BITRATE 125000  
+#define NTQ 10
+#define BRP_VAL ((FCAN / (2 * NTQ * BITRATE)) - 1)
+
+  /* setup pins */
+  /* c1rx mapped to rb6 */
+  /* c1tx mapped to rb7. refer to table 11-2. */
+  RPINR26bits.C1RXR = 6;
+  RPOR3bits.RP7R = 0x10;
+  TRISBbits.TRISB6 = 1;
+  TRISBbits.TRISB7 = 0;
+
+  /* configuration mode */
+  C1CTRL1bits.REQOP=4;
+  while (C1CTRL1bits.OPMODE != 4);
+			
+  /* FCAN is selected to be FCY */
+  C1CTRL1bits.CANCKS = 0x1;
+
+  C1CFG1bits.BRP = BRP_VAL;
+  C1CFG1bits.SJW = 0x1;
+  C1CFG2bits.SEG1PH = 0x2;
+  C1CFG2bits.SEG2PHTS = 0x1;
+  C1CFG2bits.SEG2PH = 0x2;
+  C1CFG2bits.PRSEG = 0x1;
+  C1CFG2bits.SAM = 0x1;
+	
+  /* 4 CAN Messages to be buffered in DMA RAM */	
+  C1FCTRLbits.DMABS = 0b000;
+
+  /* todo: message filters */
+		
+  /* put the module in normal mode */
+  /* todo: put in listen all mode */
+  C1CTRL1bits.REQOP = 0;
+  while (C1CTRL1bits.OPMODE != 0) ;
+
+#if 0 /* todo: enable module */
+  /* clear the buffer and overflow flags */
+  C1RXFUL1=C1RXFUL2=C1RXOVF1=C1RXOVF2=0x0000;
+  /* ECAN1, Buffer 0 is a Transmit Buffer */
+  C1TR01CONbits.TXEN0=1;			
+  /* ECAN1, Buffer 1 is a Receive Buffer */
+  C1TR01CONbits.TXEN1=0;	
+  /* ECAN1, Buffer 2 is a Receive Buffer */
+  C1TR23CONbits.TXEN2=0;	
+  /* ECAN1, Buffer 3 is a Receive Buffer */
+  C1TR23CONbits.TXEN3=0;	
+  /* Message Buffer 0 Priority Level */
+  C1TR01CONbits.TX0PRI=0b11; 		
+#endif
+		
+  /* configure the device to interrupt on the receive buffer full flag */
+  /* clear the buffer full flags */
+  C1RXFUL1=0;
+  C1INTFbits.RBIF=0;
 }
 
 static void ecan_write(uint16_t id, uint8_t* s)
