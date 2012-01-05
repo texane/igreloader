@@ -323,7 +323,7 @@ static void read_process_cmd(void)
 
   switch (cmd_buf[0])
   {
-  case CMD_ID_WRITE_PROGRAM:
+  case CMD_ID_WRITE_PMEM:
     {
       /* write a program page */
       /* note that addr and size are in words, not bytes */
@@ -382,14 +382,7 @@ static void read_process_cmd(void)
       break ;
     }
 
-  case CMD_ID_WRITE_CONFIG:
-    {
-      /* todo */
-
-      break ;
-    }
-
-  case CMD_ID_READ_PROGRAM:
+  case CMD_ID_READ_PMEM:
     {
       /* addr the first program word */
       /* size the program word count to read */
@@ -421,13 +414,6 @@ static void read_process_cmd(void)
 	/* frame ack */
 	com_read(cmd_buf);
       }
-
-      break ;
-    }
-
-  case CMD_ID_READ_CONFIG:
-    {
-      /* todo */
 
       break ;
     }

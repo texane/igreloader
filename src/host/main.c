@@ -69,7 +69,7 @@ static int com_read(serial_handle_t* handle, uint8_t* buf)
 
 /* write hex file to device memory */
 
-static int do_program
+static int do_write
 (
  serial_handle_t* handle,
  unsigned int bootid,
@@ -122,7 +122,7 @@ static int do_program
       if ((off + page_size) > pos->size) page_size = pos->size - off;
 
       /* initiate write sequence */
-      buf[0] = CMD_ID_WRITE_PROGRAM;
+      buf[0] = CMD_ID_WRITE_PMEM;
       write_uint32(buf + 1, (pos->addr + off) / 2);
       write_uint16(buf + 5, (page_size) / 4);
 
@@ -182,7 +182,7 @@ static int do_read
   read_buf = malloc(size + sizeof(cmd_buf));
   if (read_buf == NULL) goto on_error;
 
-  cmd_buf[0] = CMD_ID_READ_PROGRAM;
+  cmd_buf[0] = CMD_ID_READ_PMEM;
   write_uint32(cmd_buf + 1, addr);
   write_uint16(cmd_buf + 5, addr);
 
@@ -233,6 +233,20 @@ static int do_goto
 }
 
 
+/* retrive the status of one or all devices */
+
+static int do_status
+(
+ serial_handle_t* handle,
+ unsigned int bootid
+)
+{
+  /* todo */
+  /* bootid the device id or (unsigned int)-1 for all */
+  return 0;
+}
+
+
 /* main */
 
 int main(int ac, char** av)
@@ -241,11 +255,12 @@ int main(int ac, char** av)
      ./a.out write <serial_device> <bootid> <file.hex>
      ./a.out read <serial_device> <bootid> <addr> <size>
      ./a.out goto <serial_device> <bootid> <addr>
+     ./a.out status <serial_device> <bootid>
    */
 
   const char* const what = av[1];
   const char* const devname = av[2];
-  const unsigned int bootid = atoi(av[3]);
+  const unsigned int bootid = (ac == 3) ? (unsigned int)-1 : atoi(av[3]);
   serial_handle_t handle = { -1, };
 
   if (strcmp(devname, "null"))
@@ -260,7 +275,7 @@ int main(int ac, char** av)
   /* program device flash */
   if (strcmp(what, "write") == 0)
   {
-    if (do_program(&handle, bootid, ac - 4, av + 4) == -1)
+    if (do_write(&handle, bootid, ac - 4, av + 4) == -1)
     {
       printf("do_program() == -1\n");
       goto on_error;
@@ -279,6 +294,14 @@ int main(int ac, char** av)
     if (do_goto(&handle, bootid, ac - 4, av + 4) == -1)
     {
       printf("do_goto() == -1\n");
+      goto on_error;
+    }
+  }
+  else if (strcmp(what, "status") == 0)
+  {
+    if (do_status(&handle, bootid) == -1)
+    {
+      printf("do_status() == -1\n");
       goto on_error;
     }
   }
