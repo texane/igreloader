@@ -98,14 +98,14 @@ ${OBJECTDIR}/_ext/206687156/main.o: ../../src/bridge/main.c  nbproject/Makefile-
 	@${MKDIR} ${OBJECTDIR}/_ext/206687156 
 	@${RM} ${OBJECTDIR}/_ext/206687156/main.o.d 
 	@${RM} ${OBJECTDIR}/_ext/206687156/main.o.ok ${OBJECTDIR}/_ext/206687156/main.o.err 
-	@${FIXDEPS} "${OBJECTDIR}/_ext/206687156/main.o.d" $(SILENT) -c ${MP_CC} $(MP_EXTRA_CC_PRE) -g -D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1 -omf=elf -x c -c -mcpu=$(MP_PROCESSOR_OPTION)  -MMD -MF "${OBJECTDIR}/_ext/206687156/main.o.d" -o ${OBJECTDIR}/_ext/206687156/main.o ../../src/bridge/main.c  
+	@${FIXDEPS} "${OBJECTDIR}/_ext/206687156/main.o.d" $(SILENT) -c ${MP_CC} $(MP_EXTRA_CC_PRE) -g -D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1 -omf=elf -x c -c -mcpu=$(MP_PROCESSOR_OPTION) -O2 -MMD -MF "${OBJECTDIR}/_ext/206687156/main.o.d" -o ${OBJECTDIR}/_ext/206687156/main.o ../../src/bridge/main.c  
 	
 else
 ${OBJECTDIR}/_ext/206687156/main.o: ../../src/bridge/main.c  nbproject/Makefile-${CND_CONF}.mk
 	@${MKDIR} ${OBJECTDIR}/_ext/206687156 
 	@${RM} ${OBJECTDIR}/_ext/206687156/main.o.d 
 	@${RM} ${OBJECTDIR}/_ext/206687156/main.o.ok ${OBJECTDIR}/_ext/206687156/main.o.err 
-	@${FIXDEPS} "${OBJECTDIR}/_ext/206687156/main.o.d" $(SILENT) -c ${MP_CC} $(MP_EXTRA_CC_PRE)  -g -omf=elf -x c -c -mcpu=$(MP_PROCESSOR_OPTION)  -MMD -MF "${OBJECTDIR}/_ext/206687156/main.o.d" -o ${OBJECTDIR}/_ext/206687156/main.o ../../src/bridge/main.c  
+	@${FIXDEPS} "${OBJECTDIR}/_ext/206687156/main.o.d" $(SILENT) -c ${MP_CC} $(MP_EXTRA_CC_PRE)  -g -omf=elf -x c -c -mcpu=$(MP_PROCESSOR_OPTION) -O2 -MMD -MF "${OBJECTDIR}/_ext/206687156/main.o.d" -o ${OBJECTDIR}/_ext/206687156/main.o ../../src/bridge/main.c  
 	
 endif
 
