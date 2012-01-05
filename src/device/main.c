@@ -409,7 +409,7 @@ static void read_process_cmd(void)
       while (size)
       {
 	/* read 2 program insn at a time */
-	for (j = 0, i = 0; size && i < CMD_BUF_SIZE; i += 4, addr += 2, size -= 1)
+	for (j = 0, i = 0; size && (i < CMD_BUF_SIZE); i += 4, addr += 2, size -= 1)
 	{
 #if 1
 	  read_program_word(HI(addr), LO(addr), (uint16_t)cmd_buf + i);
@@ -417,12 +417,12 @@ static void read_process_cmd(void)
 	  const uint32_t tmp = (uint16_t)&cmd_buf[i];
 	  read_program_word(HI(addr), LO(addr), tmp);
 #endif
-
-	  com_write(cmd_buf);
-
-	  /* frame ack */
-	  com_read(cmd_buf);
 	}
+
+	com_write(cmd_buf);
+
+	/* frame ack */
+	com_read(cmd_buf);
       }
 
       break ;
