@@ -313,7 +313,7 @@ static void uart_write(uint16_t id, uint8_t* s)
 
 static inline unsigned int uart_is_rx(void)
 {
-  return U1STAbits.URXDA != 0;
+  return (U1STAbits.URXDA != 0);
 }
 
 static inline uint8_t uart_read_uint8(void)
