@@ -8,6 +8,7 @@
    availability and pwrsav instruction, and
    the cpu would idle forever.
  */
+
 #define CONFIG_USE_IDLE 0
 
 
@@ -15,6 +16,8 @@
    UART wraps CAN frames using the following format:
    <CAN_ID:2>,<CAN_PAYLOAD:8>
  */
+
+#define CAN_DATA_SIZE 8
 
 
 /* configuration bits */
@@ -57,7 +60,7 @@ static void osc_setup(void)
 
 /* ecan */
 
-#define CAN_DATA_SIZE 8
+uint16_t ecan_buf[8] __attribute__((space(dma), aligned(16)));
 
 static void ecan_setup(void)
 {
@@ -95,10 +98,9 @@ static void ecan_setup(void)
 
   /* todo: message filters */
 		
-  /* put the module in normal mode */
-  /* todo: put in listen all mode */
-  C1CTRL1bits.REQOP = 0;
-  while (C1CTRL1bits.OPMODE != 0) ;
+  /* put the module in listen all mode */
+  C1CTRL1bits.REQOP = 7;
+  while (C1CTRL1bits.OPMODE != 7) ;
 
 #if 0 /* todo: enable module */
   /* clear the buffer and overflow flags */
@@ -121,21 +123,47 @@ static void ecan_setup(void)
   C1INTFbits.RBIF=0;
 }
 
+static inline unsigned int ecan_is_rx(void)
+{
+  return C1RXFUL1bits.RXFUL1 == 0;
+}
+
 static void ecan_write(uint16_t id, uint8_t* s)
 {
-  /* todo */
+  /* todo: check TXREQ0 not already asserted */
+
+  ecan_buf[0] = id << 2;
+  ecan_buf[1] = 0;
+  ecan_buf[2] = CAN_DATA_SIZE;
+
+  ecan_buf[3] = ((uint16_t)s[1] << 8) | s[0];
+  ecan_buf[4] = ((uint16_t)s[3] << 8) | s[2];
+  ecan_buf[5] = ((uint16_t)s[5] << 8) | s[4];
+  ecan_buf[6] = ((uint16_t)s[7] << 8) | s[6];
+
+  C1TR01CONbits.TXREQ0 = 1;
 }
 
 static void ecan_read(uint16_t* id, uint8_t* s)
 {
-  /* todo */
-}
+  /* message is in ecan_buf */
 
-static inline unsigned int ecan_is_rx(void)
-{
-  /* todo */
+  if (C1RXFUL1bits.RXFUL1 == 0) return ;
 
-  return 0;
+  *id = (ecan_buf[0] & 0x1ffc) >> 2;
+
+  /* len =  (uint8_t)(ecan_buf[2] & 0xf); */
+
+  s[0] = (uint8_t)ecan_buf[3];
+  s[1] = (uint8_t)(ecan_buf[3] >> 8);
+  s[2] = (uint8_t)ecan_buf[4];
+  s[3] = (uint8_t)(ecan_buf[4] >> 8);
+  s[4] = (uint8_t)ecan_buf[5];
+  s[5] = (uint8_t)(ecan_buf[5] >> 8);
+  s[6] = (uint8_t)ecan_buf[6];
+  s[7] = (uint8_t)(ecan_buf[6] >> 8);
+
+  C1RXFUL1bits.RXFUL1 = 0;
 }
 
 
