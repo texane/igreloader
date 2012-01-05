@@ -42,7 +42,7 @@ static int com_init(serial_handle_t* handle, const char* devname)
   return 0;
 }
 
-static void com_close(serial_handle_t* handle)
+static inline void com_close(serial_handle_t* handle)
 {
   serial_close(handle);
 }
@@ -61,9 +61,24 @@ static int com_write(serial_handle_t* handle, const uint8_t* buf)
   return (size == 0) ? 0 : -1;
 }
 
-static int com_read(serial_handle_t* handle, uint8_t* buf)
+static inline int com_read(serial_handle_t* handle, uint8_t* buf)
 {
   return serial_readn(handle, buf, CMD_BUF_SIZE);
+}
+
+
+/* communication helpers */
+
+static uint8_t dummy_buf[CMD_BUF_SIZE];
+
+static inline int com_read_ack(serial_handle_t* handle)
+{
+  return com_read(handle, dummy_buf);
+}
+
+static inline int com_write_ack(serial_handle_t* handle)
+{
+  return com_write(handle, dummy_buf);
 }
 
 
@@ -80,6 +95,7 @@ static int do_write
 
   hex_range_t* ranges;
   hex_range_t* pos;
+  hex_range_t* first_dcr_range = NULL;
   unsigned int flags;
   size_t off;
   size_t i;
@@ -94,7 +110,7 @@ static int do_write
 
   hex_merge_ranges(&ranges);
 
-  /* for each range, write pages */
+  /* for each range in program memory, write pages */
   for (pos = ranges; pos != NULL; pos = pos->next)
   {
     flags = get_mem_flags(pos->addr, pos->size);
@@ -107,7 +123,8 @@ static int do_write
 
     if ((flags & MEM_FLAG_USER) == 0)
     {
-      printf("TODO: configuration space\n");
+      /* written later */
+      if (first_dcr_range == NULL) first_dcr_range = pos;
       continue ;
     }
 
@@ -129,25 +146,70 @@ static int do_write
       if (com_write(handle, buf)) goto on_error;
 
       /* command ack */
-      if (com_read(handle, buf)) goto on_error;
+      if (com_read_ack(handle)) goto on_error;
 
-      /* send the page 8 bytes at a time */
+      /* send the page 8 bytes (2 program words) at a time */
       for (i = 0; i < pos->size; i += 8)
       {
 	if (com_write(handle, pos->buf + off + i)) goto on_error;
 
 	/* frame ack */
-	if (com_read(handle, buf)) goto on_error;
+	if (com_read_ack(handle)) goto on_error;
       }
 
       /* page programming ack */
-      if (com_read(handle, buf)) goto on_error;
+      if (com_read_ack(handle)) goto on_error;
 
       /* next page or done */
       off += page_size;
       if (off == pos->size) break ;
     }
   }
+
+#if 1 /* write all device configuration registers in once */
+  if (first_dcr_range != NULL)
+  {
+    /* in bytes, CMD_BUF_SIZE to avoid last read overflow */
+    uint8_t dcr_buf[DCR_BYTE_COUNT + CMD_BUF_SIZE];
+
+    /* read the device DCR area */
+    buf[0] = CMD_ID_READ_PMEM;
+    write_uint32(buf + 1, DCR_BYTE_ADDR / 2);
+    write_uint16(buf + 5, DCR_BYTE_COUNT / 4);
+    if (com_write(handle, buf)) goto on_error;
+    if (com_read_ack(handle)) goto on_error;
+    for (i = 0; i < DCR_BYTE_COUNT; i += 8)
+    {
+      if (com_read(handle, dcr_buf + i)) goto on_error;
+      if (com_write_ack(handle)) goto on_error;
+    }
+
+    /* update according to hex ranges  */
+    for (pos = first_dcr_range; pos != NULL; pos = pos->next)
+    {
+      /* break if non DCR, since contiguous */
+      flags = get_mem_flags(pos->addr, pos->size);
+      if (!(flags & MEM_FLAG_DCR)) break ;
+
+      off = pos->addr - DCR_BYTE_ADDR;
+      memcpy(dcr_buf + off, pos->buf, pos->size);
+    }
+
+    /* write dcr_buf */
+    buf[0] = CMD_ID_WRITE_PMEM;
+    off = first_dcr_range->addr - DCR_BYTE_ADDR;
+    write_uint32(buf + 1, DCR_BYTE_ADDR / 2);
+    write_uint16(buf + 5, DCR_BYTE_COUNT / 4);
+    if (com_write(handle, buf)) goto on_error;
+    if (com_read_ack(handle)) goto on_error;
+    for (i = 0; i < DCR_BYTE_COUNT; i += 8)
+    {
+      if (com_write(handle, dcr_buf + i)) goto on_error;
+      if (com_read_ack(handle)) goto on_error;
+    }
+    if (com_read_ack(handle)) goto on_error;
+  }
+#endif /* write dcr_buf */
 
  on_error:
   if (ranges != NULL) hex_free_ranges(ranges);
@@ -184,19 +246,19 @@ static int do_read
 
   cmd_buf[0] = CMD_ID_READ_PMEM;
   write_uint32(cmd_buf + 1, addr);
-  write_uint16(cmd_buf + 5, addr);
+  write_uint16(cmd_buf + 5, size);
 
   if (com_write(handle, cmd_buf)) goto on_error;
 
   /* command ack */
-  if (com_read(handle, cmd_buf)) goto on_error;
+  if (com_read_ack(handle)) goto on_error;
 
   for (i = 0; i < size; i += 8)
   {
     if (com_read(handle, read_buf + i)) goto on_error;
 
     /* frame ack */
-    if (com_write(handle, cmd_buf)) goto on_error;
+    if (com_write_ack(handle)) goto on_error;
   }
 
   /* print the buffer */

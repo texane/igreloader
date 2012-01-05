@@ -9,6 +9,10 @@
 #define ROW_BYTE_COUNT (ROW_WORD_COUNT * 4) /* 256 */
 #define PAGE_WORD_COUNT 512
 #define PAGE_BYTE_COUNT (PAGE_WORD_COUNT * 4) /* 2048 */
+#define DCR_BYTE_COUNT ((0xf80018 - 0xf80000) * 2)
+
+/* first DCR addr, in bytes */
+#define DCR_BYTE_ADDR (0xf80000 * 2)
 
 
 static inline unsigned int get_mem_flags(uint32_t addr, uint16_t size)
