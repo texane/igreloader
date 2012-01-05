@@ -62,6 +62,35 @@ static void osc_setup(void)
 
 uint16_t ecan_bufs[4][8] __attribute__((space(dma), aligned(16)));
 
+#if 0 /* todo, ecan interrupt handler */
+
+static inline unsigned int ecan_is_rx(void);
+
+void __attribute__((interrupt, no_auto_psv)) _C1Interrupt(void)
+{
+  if (C1INTFbits.TBIF)
+  {
+    C1INTFbits.TBIF = 0;	    
+  }
+
+  if (C1INTFbits.RBIF)
+  {
+#if 0 /* todo */
+    const unsigned int buf_index = ecan_is_rx();
+    if (buf_index)
+    {
+      ecan_read(buf_index, &id, buf);
+    }
+#endif /* todo */
+
+    C1INTFbits.RBIF = 0;
+  }
+
+  IFS2bits.C1IF = 0;
+}
+
+#endif /* todo, ecan interrupt handler */
+
 static void ecan_setup(void)
 {
   /* baud rate */
@@ -175,6 +204,9 @@ static void ecan_write(uint16_t id, uint8_t* s)
 {
 #define ecan_tx_buf (ecan_bufs[0])
 
+  /* wait for previous transmission to end */
+  while (C1TR01CONbits.TXREQ0) ;
+
   ecan_tx_buf[0] = id << 2;
   ecan_tx_buf[1] = 0;
   ecan_tx_buf[2] = CAN_DATA_SIZE;
@@ -185,8 +217,6 @@ static void ecan_write(uint16_t id, uint8_t* s)
   ecan_tx_buf[6] = ((uint16_t)s[7] << 8) | s[6];
 
   C1TR01CONbits.TXREQ0 = 1;
-
-  /* todo: wait for transmission to end */
 }
 
 static void ecan_read(unsigned int buf_index, uint16_t* id, uint8_t* s)
