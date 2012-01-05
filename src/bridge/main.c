@@ -125,9 +125,14 @@ static void uart_write(uint16_t id, uint8_t* s)
     uart_write_uint8(*s);
 }
 
+static inline unsigned int uart_is_rx(void)
+{
+  return U1STAbits.URXDA != 0;
+}
+
 static inline uint8_t uart_read_uint8(void)
 {
-  while (U1STAbits.URXDA == 0) ;
+  while (uart_is_rx() == 0) ;
   return U1RXREG;
 }
 
@@ -141,11 +146,6 @@ static void uart_read(uint16_t* id, uint8_t* s)
 
   for (i = 0; i < CAN_DATA_SIZE; ++i, ++s)
     *s = uart_read_uint8();
-}
-
-static inline unsigned int uart_is_rx(void)
-{
-  return U1STAbits.URXDA != 0;
 }
 
 
