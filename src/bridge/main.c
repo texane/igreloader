@@ -60,7 +60,7 @@ static void osc_setup(void)
 
 /* ecan */
 
-uint16_t ecan_buf[8] __attribute__((space(dma), aligned(16)));
+uint16_t ecan_bufs[4][8] __attribute__((space(dma), aligned(16)));
 
 static void ecan_setup(void)
 {
@@ -93,77 +93,102 @@ static void ecan_setup(void)
   C1CFG2bits.PRSEG = 0x1;
   C1CFG2bits.SAM = 0x1;
 	
-  /* 4 CAN Messages to be buffered in DMA RAM */	
-  C1FCTRLbits.DMABS = 0b000;
+  /* 4 messages buffered in DMA RAM */
+  C1FCTRLbits.DMABS = 0;
 
-  /* todo: message filters */
+  /* todo: dont care message filter */
 		
-  /* put the module in listen all mode */
-  C1CTRL1bits.REQOP = 7;
-  while (C1CTRL1bits.OPMODE != 7) ;
+  /* put the module in normal mode */
+  C1CTRL1bits.REQOP = 0;
+  while (C1CTRL1bits.OPMODE != 0) ;
 
-#if 0 /* todo: enable module */
-  /* clear the buffer and overflow flags */
-  C1RXFUL1=C1RXFUL2=C1RXOVF1=C1RXOVF2=0x0000;
-  /* ECAN1, Buffer 0 is a Transmit Buffer */
-  C1TR01CONbits.TXEN0=1;			
-  /* ECAN1, Buffer 1 is a Receive Buffer */
-  C1TR01CONbits.TXEN1=0;	
-  /* ECAN1, Buffer 2 is a Receive Buffer */
-  C1TR23CONbits.TXEN2=0;	
-  /* ECAN1, Buffer 3 is a Receive Buffer */
-  C1TR23CONbits.TXEN3=0;	
-  /* Message Buffer 0 Priority Level */
-  C1TR01CONbits.TX0PRI=0b11; 		
-#endif
-		
+  C1RXFUL1 = 0;
+  C1RXFUL2 = 0;
+  C1RXOVF1 = 0;
+  C1RXOVF2 = 0;
+
+  /* buffer 0 a transmit buffer */
+  C1TR01CONbits.TXEN0 = 1;
+
+  /* buffer 1 a receive buffer */
+  C1TR01CONbits.TXEN1 = 0;
+
   /* configure the device to interrupt on the receive buffer full flag */
   /* clear the buffer full flags */
-  C1RXFUL1=0;
-  C1INTFbits.RBIF=0;
+  C1RXFUL1 = 0;
+  C1INTFbits.RBIF = 0;
+
+  /* setup dma channel 0 for tx buffer */
+  DMACS0 = 0;
+  DMA0CON = 0x2020; 
+  DMA0PAD = 0x0442;
+  DMA0CNT = 7;
+  DMA0REQ = 0x0046;	
+  DMA0STA = __builtin_dmaoffset(&ecan_bufs);
+  DMA0CONbits.CHEN = 1;
+	
+  /* setup the DMA channel 2 for rx buffer */
+  DMACS0 = 0;
+  DMA2CON = 0x0020;
+  DMA2PAD = 0x0440;	
+  DMA2CNT = 7;
+  DMA2REQ = 0x0022;	
+  DMA2STA = __builtin_dmaoffset(&ecan_bufs);
+  DMA2CONbits.CHEN = 1;
+
+#if 0 /* setup interrupts */
+  IEC2bits.C1IE = 1;
+  C1INTEbits.TBIE = 1;
+  C1INTEbits.RBIE = 1;
+#endif
 }
 
 static inline unsigned int ecan_is_rx(void)
 {
-  return C1RXFUL1bits.RXFUL1 == 0;
+  /* return 0 if no rx buffer full */
+
+  if (C1RXFUL1bits.RXFUL1) return 1;
+  else if (C1RXFUL1bits.RXFUL2) return 2;
+  else if (C1RXFUL1bits.RXFUL3) return 3;
+  return 0;
 }
 
 static void ecan_write(uint16_t id, uint8_t* s)
 {
-  /* todo: check TXREQ0 not already asserted */
+#define ecan_tx_buf (ecan_bufs[0])
 
-  ecan_buf[0] = id << 2;
-  ecan_buf[1] = 0;
-  ecan_buf[2] = CAN_DATA_SIZE;
+  ecan_tx_buf[0] = id << 2;
+  ecan_tx_buf[1] = 0;
+  ecan_tx_buf[2] = CAN_DATA_SIZE;
 
-  ecan_buf[3] = ((uint16_t)s[1] << 8) | s[0];
-  ecan_buf[4] = ((uint16_t)s[3] << 8) | s[2];
-  ecan_buf[5] = ((uint16_t)s[5] << 8) | s[4];
-  ecan_buf[6] = ((uint16_t)s[7] << 8) | s[6];
+  ecan_tx_buf[3] = ((uint16_t)s[1] << 8) | s[0];
+  ecan_tx_buf[4] = ((uint16_t)s[3] << 8) | s[2];
+  ecan_tx_buf[5] = ((uint16_t)s[5] << 8) | s[4];
+  ecan_tx_buf[6] = ((uint16_t)s[7] << 8) | s[6];
 
   C1TR01CONbits.TXREQ0 = 1;
+
+  /* todo: wait for transmission to end */
 }
 
-static void ecan_read(uint16_t* id, uint8_t* s)
+static void ecan_read(unsigned int buf_index, uint16_t* id, uint8_t* s)
 {
-  /* message is in ecan_buf */
+#define ecan_rx_buf (ecan_bufs[buf_index])
 
-  if (C1RXFUL1bits.RXFUL1 == 0) return ;
+  *id = (ecan_rx_buf[0] & 0x1ffc) >> 2;
 
-  *id = (ecan_buf[0] & 0x1ffc) >> 2;
+  s[0] = (uint8_t)ecan_rx_buf[3];
+  s[1] = (uint8_t)(ecan_rx_buf[3] >> 8);
+  s[2] = (uint8_t)ecan_rx_buf[4];
+  s[3] = (uint8_t)(ecan_rx_buf[4] >> 8);
+  s[4] = (uint8_t)ecan_rx_buf[5];
+  s[5] = (uint8_t)(ecan_rx_buf[5] >> 8);
+  s[6] = (uint8_t)ecan_rx_buf[6];
+  s[7] = (uint8_t)(ecan_rx_buf[6] >> 8);
 
-  /* len =  (uint8_t)(ecan_buf[2] & 0xf); */
-
-  s[0] = (uint8_t)ecan_buf[3];
-  s[1] = (uint8_t)(ecan_buf[3] >> 8);
-  s[2] = (uint8_t)ecan_buf[4];
-  s[3] = (uint8_t)(ecan_buf[4] >> 8);
-  s[4] = (uint8_t)ecan_buf[5];
-  s[5] = (uint8_t)(ecan_buf[5] >> 8);
-  s[6] = (uint8_t)ecan_buf[6];
-  s[7] = (uint8_t)(ecan_buf[6] >> 8);
-
-  C1RXFUL1bits.RXFUL1 = 0;
+  if (buf_index == 1) C1RXFUL1bits.RXFUL1 = 0;
+  else if (buf_index == 2) C1RXFUL1bits.RXFUL2 = 0;
+  else if (buf_index == 3) C1RXFUL1bits.RXFUL3 = 0;
 }
 
 
@@ -280,6 +305,7 @@ int main(void)
 {
   uint8_t buf[CAN_DATA_SIZE];
   uint16_t id;
+  unsigned int buf_index;
 
   osc_setup();
   uart_setup();
@@ -296,9 +322,10 @@ int main(void)
       ecan_write(id, buf);
     }
 
-    if (ecan_is_rx())
+    buf_index = ecan_is_rx();
+    if (buf_index)
     {
-      ecan_read(&id, buf);
+      ecan_read(buf_index, &id, buf);
       uart_write(id, buf);
     }
 #endif
