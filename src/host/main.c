@@ -241,7 +241,7 @@ static int do_read
   /* todo: check size */
 
   /* allocate a bit larger to avoid overflow on last read */
-  read_buf = malloc(size + sizeof(cmd_buf));
+  read_buf = malloc(size + CMD_BUF_SIZE);
   if (read_buf == NULL) goto on_error;
 
   cmd_buf[0] = CMD_ID_READ_PMEM;
