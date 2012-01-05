@@ -190,12 +190,7 @@ int hex_read_ranges(const char* filename, hex_range_t** first_range)
       cur_range = malloc(offsetof(hex_range_t, buf) + count);
       cur_range->next = NULL;
       cur_range->prev = prev_range;
-
-      /* for more info on the addr / 2 operation, refer to:
-	 MPLAB ASM30 MPLAB LINK30 AND UTILITIES USER'S GUIDE, ch.14
-      */
-      cur_range->addr = ((hiaddr << 16) | loaddr) / 2;
-
+      cur_range->addr = (hiaddr << 16) | loaddr;
       cur_range->size = count;
 
       /* link the new range */
@@ -462,12 +457,6 @@ void hex_merge_ranges(hex_range_t** ranges)
   }
 
   hex_free_ranges(saved_ranges);
-}
-
-__attribute__((unused))
-static int hex_check_ranges(const hex_range_t* ranges)
-{
-  return 0;
 }
 
 void hex_print_ranges(const hex_range_t* ranges)

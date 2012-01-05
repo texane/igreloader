@@ -304,13 +304,13 @@ static inline void flush_program_latches(void)
 
 static void read_process_cmd(void)
 {
-#define ROW_WORD_SIZE 64
-#define ROW_BYTE_SIZE (ROW_WORD_SIZE * 4) /* 256 */
-#define PAGE_WORD_SIZE 512
-#define PAGE_BYTE_SIZE (PAGE_WORD_SIZE * 4) /* 2048 */
+#define ROW_WORD_COUNT 64
+#define ROW_BYTE_COUNT (ROW_WORD_COUNT * 4) /* 256 */
+#define PAGE_WORD_COUNT 512
+#define PAGE_BYTE_COUNT (PAGE_WORD_COUNT * 4) /* 2048 */
 
   /* CMD_BUF_SIZE added to avoid overflow in com_read */
-  uint8_t page_buf[PAGE_BYTE_SIZE + CMD_BUF_SIZE];
+  uint8_t page_buf[PAGE_BYTE_COUNT + CMD_BUF_SIZE];
 
   uint8_t cmd_buf[CMD_BUF_SIZE];
   uint32_t addr;
@@ -336,13 +336,13 @@ static void read_process_cmd(void)
 
       /* read the page before erasing, if not a full page */
       off = 0;
-      if (size != PAGE_BYTE_SIZE)
+      if (size != PAGE_BYTE_COUNT)
       {
-	off = addr % PAGE_BYTE_SIZE;
+	off = addr % PAGE_BYTE_COUNT;
 	addr -= off;
 
 	/* read one insn at a time */
-	for (i = 0, j = 0; i < PAGE_BYTE_SIZE; i += 4, j += 2)
+	for (i = 0, j = 0; i < PAGE_BYTE_COUNT; i += 4, j += 2)
 	{
 	  const uint32_t tmp = (uint32_t)(addr + j);
 	  read_program_word(HI(tmp), LO(tmp), (uint16_t)(page_buf + i));
@@ -362,10 +362,10 @@ static void read_process_cmd(void)
       }
 
       /* write a whole page. i incremented by inner loop */
-      for (i = 0; i < PAGE_BYTE_SIZE; )
+      for (i = 0; i < PAGE_BYTE_COUNT; )
       {
 	/* fill the one row program memory latch one word at a time */
-	for (j = 0; j < ROW_WORD_SIZE; i += 4, ++j, addr += 2)
+	for (j = 0; j < ROW_WORD_COUNT; i += 4, ++j, addr += 2)
 	{
 	  /* todo: fix with -O2 */
 	  const uint32_t tmp = *(uint32_t*)(page_buf + i);

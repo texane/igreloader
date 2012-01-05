@@ -5,7 +5,10 @@
 #include <stdint.h>
 
 
-#define FLASH_PAGE_SIZE (512 * 3)
+#define ROW_WORD_COUNT 64
+#define ROW_BYTE_COUNT (ROW_WORD_COUNT * 4) /* 256 */
+#define PAGE_WORD_COUNT 512
+#define PAGE_BYTE_COUNT (PAGE_WORD_COUNT * 4) /* 2048 */
 
 
 static inline unsigned int get_mem_flags(uint32_t addr, uint16_t size)
@@ -17,7 +20,11 @@ static inline unsigned int get_mem_flags(uint32_t addr, uint16_t size)
 #define MEM_FLAG_DEVID (1 << 4)
 #define MEM_FLAG_RESERVED (1 << 5)
 
-  const uint32_t hi = addr + size;
+  /* for more info on the addr / 2 operation, refer to:
+     MPLAB ASM30 MPLAB LINK30 AND UTILITIES USER'S GUIDE, ch.14
+  */
+
+  const uint32_t hi = (addr + size) / 2;
 
   unsigned int flags = 0;
 

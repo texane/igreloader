@@ -24,7 +24,7 @@
 
 static int com_init(serial_handle_t* handle, const char* devname)
 {
-  static const serial_conf_t conf = { 9600, 8, SERIAL_PARITY_DISABLED, 1 };
+  static const serial_conf_t conf = { 38400, 8, SERIAL_PARITY_DISABLED, 1 };
 
   if (serial_open(handle, devname) == -1)
   {
@@ -113,18 +113,18 @@ static int do_program
 
     /* handle unaligned first page */
     off = 0;
-    page_size = FLASH_PAGE_SIZE - (pos->addr % FLASH_PAGE_SIZE);
+    page_size = PAGE_BYTE_COUNT - (pos->addr % PAGE_BYTE_COUNT);
 
     while (1)
     {
       /* adjust page size */
-      page_size = FLASH_PAGE_SIZE;
+      page_size = PAGE_BYTE_COUNT;
       if ((off + page_size) > pos->size) page_size = pos->size - off;
 
       /* initiate write sequence */
       buf[0] = CMD_ID_WRITE_PROGRAM;
-      write_uint32(buf + 1, pos->addr + off);
-      write_uint16(buf + 5, page_size);
+      write_uint32(buf + 1, (pos->addr + off) / 2);
+      write_uint16(buf + 5, (page_size) / 4);
 
       if (com_write(handle, buf)) goto on_error;
 
@@ -165,6 +165,9 @@ static int do_read
  int ac, char** av
 )
 {
+  /* addr the first word address to read */
+  /* size the word count to read */
+
   const uint32_t addr = strtoul(av[0], NULL, 16);
   const uint16_t size = strtoul(av[1], NULL, 10);
   uint8_t* read_buf = NULL;
@@ -188,8 +191,7 @@ static int do_read
   /* command ack */
   if (com_read(handle, cmd_buf)) goto on_error;
 
-  /* read 2 24 bits words per frame */
-  for (i = 0; i < size; i += 6)
+  for (i = 0; i < size; i += 8)
   {
     if (com_read(handle, read_buf + i)) goto on_error;
 
@@ -198,7 +200,8 @@ static int do_read
   }
 
   /* print the buffer */
-  for (i = 0; i < size; ++i) printf(" %02x", read_buf[i]);
+  for (i = 0; i < size; i += 4)
+    printf("%04x: %08x", i, read_uint32(read_buf + i));
   printf("\n");
 
   /* success */
@@ -243,12 +246,15 @@ int main(int ac, char** av)
   const char* const what = av[1];
   const char* const devname = av[2];
   const unsigned int bootid = atoi(av[3]);
-  serial_handle_t handle;
+  serial_handle_t handle = { -1, };
 
-  if (com_init(&handle, devname) == -1)
+  if (strcmp(devname, "null"))
   {
-    printf("com_init(%s) == -1\n", devname);
-    goto on_error;
+    if (com_init(&handle, devname) == -1)
+    {
+      printf("com_init(%s) == -1\n", devname);
+      goto on_error;
+    }
   }
 
   /* program device flash */
@@ -283,7 +289,7 @@ int main(int ac, char** av)
   }
 
  on_error:
-  com_close(&handle);
+  if (handle.fd != -1) com_close(&handle);
 
   return 0;
 }
