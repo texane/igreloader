@@ -151,11 +151,11 @@ static void ecan_setup(void)
   C1RXOVF1 = 0;
   C1RXOVF2 = 0;
 
-  /* buffer 0 a transmit buffer */
+  /* buffer N a transmit or receive buffer */
   C1TR01CONbits.TXEN0 = 1;
-
-  /* buffer 1 a receive buffer */
   C1TR01CONbits.TXEN1 = 0;
+  C1TR23CONbits.TXEN2 = 0;
+  C1TR23CONbits.TXEN3 = 0;
 
   /* configure the device to interrupt on the receive buffer full flag */
   /* clear the buffer full flags */
