@@ -19,9 +19,6 @@
    acts as a serial to CAN bridge.
  */
 
-/* todo: timeout version of com_read
- */
-
 
 /* communication routines */
 

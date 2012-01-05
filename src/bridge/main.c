@@ -131,6 +131,13 @@ static inline unsigned int ecan_is_rx(void)
 
 /* uart */
 
+void __attribute__((__interrupt__, no_auto_psv)) _U1RXInterrupt(void)
+{
+  /* data not processed here. only used to leave idle mode. */
+  IFS0bits.U1RXIF = 0;
+  return ;
+}
+
 static void uart_setup(void)
 {
 #define CONFIG_UART_BAUDRATE 38400
@@ -157,11 +164,9 @@ static void uart_setup(void)
   U1MODEbits.UARTEN = 1;
   U1STAbits.UTXEN = 1;
 
-#if 0 /* interrupts disabled */
   IFS0bits.U1RXIF = 0;
   IPC2bits.U1RXIP = 3;
   IEC0bits.U1RXIE = 1;
-#endif /* interrupts disabled */
 }
 
 static inline void uart_write_uint8(uint8_t x)
@@ -206,13 +211,23 @@ static void uart_read(uint16_t* id, uint8_t* s)
 }
 
 
+/* enter idle mode */
+
+static inline void idle(void)
+{
+  __asm__ __volatile__
+  (
+   "pwrsav #1 \n\t"
+  );
+}
+
+
 /* main */
 
 int main(void)
 {
   uint8_t buf[CAN_DATA_SIZE];
   uint16_t id;
-  unsigned int do_sleep;
 
   osc_setup();
   uart_setup();
@@ -220,25 +235,18 @@ int main(void)
 
   while (1)
   {
-    do_sleep = 1;
+    idle();
 
     if (uart_is_rx())
     {
-      do_sleep = 0;
       uart_read(&id, buf);
       ecan_write(id, buf);
     }
 
     if (ecan_is_rx())
     {
-      do_sleep = 0;
       ecan_read(&id, buf);
       uart_write(id, buf);
-    }
-
-    if (do_sleep)
-    {
-      /* todo: enter sleep mode */
     }
   }
 
