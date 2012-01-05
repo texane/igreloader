@@ -96,8 +96,26 @@ static void ecan_setup(void)
   /* 4 messages buffered in DMA RAM */
   C1FCTRLbits.DMABS = 0;
 
-  /* todo: dont care message filter */
-		
+  /* dummy filter */
+  C1CTRL1bits.WIN = 1;
+  /* select acceptance mask 0 filter 0 buffer 1 */
+  C1FMSKSEL1bits.F0MSK = 0;
+
+  /* accept all standard sids */
+  C1RXM0SID = 0;
+  C1RXF0SID = 0;
+  C1RXM0SID = 0x0008; /* mide bit */
+  C1RXF0SID = 0;
+
+  /* use buffer 1 for incoming messages */
+  C1BUFPNT1bits.F0BP = 1;
+
+  /* enable filter 0 */
+  C1FEN1bits.FLTEN0 = 1;
+
+  /* clear window bit to access ECAN control registers */
+  C1CTRL1bits.WIN = 0;
+
   /* put the module in normal mode */
   C1CTRL1bits.REQOP = 0;
   while (C1CTRL1bits.OPMODE != 0) ;
