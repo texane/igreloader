@@ -256,13 +256,10 @@ static inline void erase_program_page
    "bset NVMCON, #15 \n\t"
 
    /* wait for end of sequence */
-#if 1
    "nop \n\t"
    "nop \n\t"
-#else
    "1: btsc NVMCON, #15 \n\t"
    "bra 1b \n\t"
-#endif
 
    : "=&r"(tmp)
    : "r"(addrhi), "r"(addrlo), "0"(tmp)
@@ -287,13 +284,11 @@ static inline void flush_program_latches(void)
    "mov #0xaa, %0 \n\t"
    "mov %1, NVMKEY \n\t"
    "bset NVMCON, #15 \n\t"
-#if 1
    "nop \n\t"
    "nop \n\t"
-#else
    "1: btsc NVMCON, #15 \n\t"
    "bra 1b \n\t"
-#endif
+
    : "=&r"(tmp)
    : "0"(tmp)
   );
