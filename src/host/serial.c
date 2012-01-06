@@ -4,8 +4,6 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
-
-#define CONFIG_SERIAL_DEBUG 0
 #include "serial.h"
 
 
@@ -28,10 +26,8 @@ static void invalid_handle(serial_handle_t* h)
 
   memset(&h->termios, 0, sizeof(struct termios));
 
-#if _DEBUG
-
+#if CONFIG_SERIAL_DEBUG
   h->name = NULL;
-
 #endif
 }
 
@@ -239,16 +235,26 @@ int serial_set_conf(serial_handle_t* h,
 {
   struct termios termios;
 
+#if 1
   memset(&termios, 0, sizeof(struct termios));
-
   if (!(termios.c_cflag = conf_to_speed_t(c)))
     {
       DEBUG_ERROR("conf_to_speed_t()\n");
       goto on_error;
     }
-
-  termios.c_ispeed = termios.c_cflag;
-  termios.c_ospeed = termios.c_cflag;
+#else
+  tcgetattr(h->fd, &termios);
+  cfsetospeed(&termios, (speed_t)B38400);
+  cfsetispeed(&termios, (speed_t)B38400);
+  termios.c_cflag = (termios.c_cflag & ~CSIZE) | CS8;
+  termios.c_iflag = IGNBRK;
+  termios.c_lflag = 0;
+  termios.c_oflag = 0;
+  termios.c_cflag |= CLOCAL | CREAD;
+  termios.c_iflag &= ~(IXON | IXOFF | IXANY);
+  termios.c_cflag &= ~(PARENB | PARODD);
+  termios.c_cflag &= ~CSTOPB;
+#endif
 
   if (tcsetattr(h->fd, TCSANOW, &termios) == -1)
     {
