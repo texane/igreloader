@@ -103,7 +103,7 @@ static inline void delay(void)
 
 /* get 16 bits parts from 32 bits value */
 
-#define LO(__x) (((__x) >> 0) & 0xffff)
+#define LO(__x) ((__x) & 0xffff)
 #define HI(__x) (((__x) >> 16) & 0xffff)
 
 
@@ -409,14 +409,10 @@ static void read_process_cmd(void)
       while (size)
       {
 	/* read 2 program insn at a time */
-	for (j = 0, i = 0; size && (i < CMD_BUF_SIZE); i += 4, addr += 2, size -= 1)
+	for (i = 0; size && (i < CMD_BUF_SIZE); i += 4, addr += 2, size -= 1)
 	{
-#if 1
-	  read_program_word(HI(addr), LO(addr), (uint16_t)cmd_buf + i);
-#else /* -O2 compilation fix */
 	  const uint32_t tmp = (uint16_t)&cmd_buf[i];
 	  read_program_word(HI(addr), LO(addr), tmp);
-#endif
 	}
 
 	com_write(cmd_buf);
