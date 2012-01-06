@@ -321,7 +321,6 @@ static void read_process_cmd(void)
 
   /* CMD_BUF_SIZE added to avoid overflow in com_read */
   uint8_t page_buf[PAGE_BYTE_COUNT + CMD_BUF_SIZE];
-
   uint8_t cmd_buf[CMD_BUF_SIZE];
   uint32_t addr;
   uint16_t size;
@@ -345,17 +344,20 @@ static void read_process_cmd(void)
       com_write(cmd_buf);
 
       /* read the page before erasing, if not a full page */
-      off = 0;
-      if (size != PAGE_BYTE_COUNT)
+      off = addr % PAGE_WORD_COUNT;
+      if (off || (size != PAGE_WORD_COUNT))
       {
-	off = addr % PAGE_BYTE_COUNT;
+	/* adjust addr to start of page */
 	addr -= off;
 
-	/* read one insn at a time */
+	/* offset in bytes */
+	off *= 4;
+
+	/* read one word at a time */
 	for (i = 0, j = 0; i < PAGE_BYTE_COUNT; i += 4, j += 2)
 	{
-	  const uint32_t tmp = (uint32_t)(addr + j);
-	  read_program_word(HI(tmp), LO(tmp), (uint16_t)(page_buf + i));
+	  const uint32_t tmp = addr + j;
+	  read_program_word(HI(tmp), LO(tmp), (uint16_t)&page_buf[i]);
 	}
       }
 
@@ -363,7 +365,7 @@ static void read_process_cmd(void)
       erase_program_page(HI(addr), LO(addr));
 
       /* receive the page */
-      for (i = 0; i < size; i += CMD_BUF_SIZE)
+      for (i = 0; i < (size * 4); i += CMD_BUF_SIZE)
       {
 	com_read(page_buf + off + i);
 
@@ -377,8 +379,7 @@ static void read_process_cmd(void)
 	/* fill the one row program memory latch one word at a time */
 	for (j = 0; j < ROW_WORD_COUNT; i += 4, ++j, addr += 2)
 	{
-	  /* todo: fix with -O2 */
-	  const uint32_t tmp = *(uint32_t*)(page_buf + i);
+	  const uint32_t tmp = *(uint32_t*)(&page_buf[i]);
 	  write_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
 
