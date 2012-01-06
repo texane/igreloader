@@ -268,7 +268,7 @@ static int do_read
   /* todo: check size */
 
   /* allocate a bit larger to avoid overflow on last read */
-  read_buf = malloc(size + CMD_BUF_SIZE);
+  read_buf = malloc((size * 4) + CMD_BUF_SIZE);
   if (read_buf == NULL) goto on_error;
 
   cmd_buf[0] = CMD_ID_READ_PMEM;
@@ -280,7 +280,7 @@ static int do_read
   /* command ack */
   if (com_read_ack(handle)) goto on_error;
 
-  for (i = 0; i < size; i += 8)
+  for (i = 0; i < (size * 4); i += 8)
   {
     if (com_read(handle, read_buf + i)) goto on_error;
 
@@ -289,8 +289,8 @@ static int do_read
   }
 
   /* print the buffer */
-  for (i = 0; i < size; i += 4)
-    printf("%04x: %08x", i, read_uint32(read_buf + i));
+  for (i = 0; i < (size * 4); i += 4)
+    printf("%06x: %08x\n", addr + i / 2, read_uint32(read_buf + i) & 0xffffff);
   printf("\n");
 
   /* success */
