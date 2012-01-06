@@ -190,7 +190,7 @@ static int do_write
       /* send the page 8 bytes (2 program words) at a time */
       for (i = 0; i < page_size; i += 8)
       {
-	printf("com_write\n");
+	printf("com_write (%x)\n", off + i);
 	if (com_write(handle, pos->buf + off + i)) goto on_error;
 
 	/* frame ack */

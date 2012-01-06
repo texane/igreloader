@@ -241,7 +241,7 @@ static inline void erase_program_page
 
    /* load page address */
    "mov %1, TBLPAG \n\t"
-   "tblwtl %0, [ %2 ] \n\t"
+   "tblwtl %2, [ %2 ] \n\t"
 
    /* disable interrupt for 5 next insns */
    "disi #5 \n\t"
@@ -357,12 +357,13 @@ static void read_process_cmd(void)
 	for (i = 0, j = 0; i < PAGE_BYTE_COUNT; i += 4, j += 2)
 	{
 	  const uint32_t tmp = addr + j;
-	  read_program_word(HI(tmp), LO(tmp), (uint16_t)&page_buf[i]);
+
+	  /* this is needed otherwise tblrd crashes */
+	  uint32_t fixme;
+	  read_program_word(HI(tmp), LO(tmp), (uint16_t)&fixme);
+	  *(uint32_t*)(page_buf + i) = fixme;
 	}
       }
-
-      /* erase page */
-      erase_program_page(HI(addr), LO(addr));
 
       /* receive the page */
       for (i = 0; i < (size * 4); i += CMD_BUF_SIZE)
@@ -373,13 +374,16 @@ static void read_process_cmd(void)
 	com_write(cmd_buf);
       }
 
+      /* erase page */
+      erase_program_page(HI(addr), LO(addr));
+
       /* write a whole page. i incremented by inner loop */
       for (i = 0; i < PAGE_BYTE_COUNT; )
       {
 	/* fill the one row program memory latch one word at a time */
 	for (j = 0; j < ROW_WORD_COUNT; i += 4, ++j, addr += 2)
 	{
-	  const uint32_t tmp = *(uint32_t*)(&page_buf[i]);
+	  const uint32_t tmp = *(uint32_t*)&page_buf[i];
 	  write_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
 
@@ -411,10 +415,7 @@ static void read_process_cmd(void)
       {
 	/* read 2 program insn at a time */
 	for (i = 0; size && (i < CMD_BUF_SIZE); i += 4, addr += 2, size -= 1)
-	{
-	  const uint32_t tmp = (uint16_t)&cmd_buf[i];
-	  read_program_word(HI(addr), LO(addr), tmp);
-	}
+	  read_program_word(HI(addr), LO(addr), (uint16_t)&cmd_buf[i]);
 
 	com_write(cmd_buf);
 
