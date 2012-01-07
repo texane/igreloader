@@ -203,13 +203,16 @@ static inline void read_program_word
 {
   /* read a 24 bits program word at addr to [data] */
 
+  register uint16_t hdata asm("w7") = data + 2;
+
   __asm__ __volatile__
   (
    "mov %0, TBLPAG \n\t"
-   "tblrdl [ %1 ], [ %2++ ] \n\t"
+   "tblrdl [ %1 ], [ %3 ] \n\t"
    "tblrdh [ %1 ], [ %2 ] \n\t"
+
    :
-   : "r"(haddr), "r"(laddr), "r"(data)
+   : "r"(haddr), "r"(laddr), "r"(hdata), "r"(data)
   );
 }
 
@@ -378,7 +381,7 @@ static void read_process_cmd(void)
 	/* fill the one row program memory latch one word at a time */
 	for (j = 0; j < ROW_WORD_COUNT; i += 4, ++j, addr += 2)
 	{
-	  const uint32_t tmp = *(uint32_t*)&page_buf[i];
+	  const uint32_t tmp = *(uint32_t*)(page_buf + i);
 	  write_program_word(HI(addr), LO(addr), HI(tmp), LO(tmp));
 	}
 
