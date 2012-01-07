@@ -137,8 +137,6 @@ static int do_write
 
   hex_merge_ranges(&ranges);
 
-  hex_print_ranges(ranges);
-
   /* for each range in program memory, write pages */
   for (pos = ranges; pos != NULL; pos = pos->next)
   {
@@ -163,8 +161,6 @@ static int do_write
       continue ;
     }
 
-    printf("range [%x - %x]\n", pos->addr, pos->addr + pos->size);
-
     /* handle unaligned first page */
     off = 0;
     page_size = PAGE_BYTE_COUNT - (pos->addr % PAGE_BYTE_COUNT);
@@ -179,27 +175,21 @@ static int do_write
       write_uint32(buf + 1, (pos->addr + off) / 2);
       write_uint16(buf + 5, page_size / 4);
 
-      printf("cmd (%x - %x)\n", (pos->addr + off) / 2, pos->size / 4);
-
       if (com_write(handle, buf)) goto on_error;
 
       /* command ack */
-      printf("com_read_ack\n");
       if (com_read_ack(handle)) goto on_error;
 
       /* send the page 8 bytes (2 program words) at a time */
       for (i = 0; i < page_size; i += 8)
       {
-	printf("com_write (%x)\n", off + i);
 	if (com_write(handle, pos->buf + off + i)) goto on_error;
 
 	/* frame ack */
-	printf("com_read_frame_ack\n");
 	if (com_read_ack(handle)) goto on_error;
       }
 
       /* page programming ack */
-      printf("page_programming_ack\n");
       if (com_read_ack(handle)) goto on_error;
 
       /* next page or done */
