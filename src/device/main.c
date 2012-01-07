@@ -355,11 +355,7 @@ static void read_process_cmd(void)
 	for (i = 0, j = 0; i < PAGE_BYTE_COUNT; i += 4, j += 2)
 	{
 	  const uint32_t tmp = addr + j;
-
-	  /* this is needed otherwise tblrd crashes */
-	  uint32_t fixme;
-	  read_program_word(HI(tmp), LO(tmp), (uint16_t)&fixme);
-	  *(uint32_t*)(page_buf + i) = fixme;
+	  read_program_word(HI(tmp), LO(tmp), (uint16_t)(page_buf + i));
 	}
       }
 
@@ -413,7 +409,7 @@ static void read_process_cmd(void)
       {
 	/* read 2 program insn at a time */
 	for (i = 0; size && (i < CMD_BUF_SIZE); i += 4, addr += 2, size -= 1)
-	  read_program_word(HI(addr), LO(addr), (uint16_t)&cmd_buf[i]);
+	  read_program_word(HI(addr), LO(addr), (uint16_t)(cmd_buf + i));
 
 	com_write(cmd_buf);
 
