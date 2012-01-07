@@ -137,6 +137,8 @@ static int do_write
 
   hex_merge_ranges(&ranges);
 
+  hex_print_ranges(ranges);
+
   /* for each range in program memory, write pages */
   for (pos = ranges; pos != NULL; pos = pos->next)
   {
@@ -161,6 +163,9 @@ static int do_write
       continue ;
     }
 
+    /* user code relocated */
+    pos->addr += 0x8000;
+
     /* handle unaligned first page */
     off = 0;
     page_size = PAGE_BYTE_COUNT - (pos->addr % PAGE_BYTE_COUNT);
@@ -170,11 +175,14 @@ static int do_write
       /* check if bigger than */
       if ((off + page_size) > pos->size) page_size = pos->size - off;
 
+      printf("CMD_ID_WRITE_PMEM(%x, %u)\n",
+	     (pos->addr + off) / 2,
+	     page_size / 4);
+
       /* initiate write sequence */
       buf[0] = CMD_ID_WRITE_PMEM;
       write_uint32(buf + 1, (pos->addr + off) / 2);
       write_uint16(buf + 5, page_size / 4);
-
       if (com_write(handle, buf)) goto on_error;
 
       /* command ack */
@@ -201,11 +209,17 @@ static int do_write
     }
   }
 
+  printf("[x] program code memory done\n");
+
 #if 1 /* write all device configuration registers in once */
   if (first_dcr_range != NULL)
   {
     /* in bytes, CMD_BUF_SIZE to avoid last read overflow */
     uint8_t dcr_buf[DCR_BYTE_COUNT + CMD_BUF_SIZE];
+
+    printf("read DCR area\n");
+    printf("CMD_ID_READ_PMEM(%x, %u)\n",
+	   DCR_BYTE_ADDR / 2, DCR_BYTE_COUNT / 4);
 
     /* read the device DCR area */
     buf[0] = CMD_ID_READ_PMEM;
@@ -219,6 +233,8 @@ static int do_write
       if (com_write_ack(handle)) goto on_error;
     }
 
+    printf("[x] read DCR area\n");
+
     /* update according to hex ranges  */
     for (pos = first_dcr_range; pos != NULL; pos = pos->next)
     {
@@ -230,19 +246,25 @@ static int do_write
       memcpy(dcr_buf + off, pos->buf, pos->size);
     }
 
+    printf("write DCR area\n");
+
     /* write dcr_buf */
-    buf[0] = CMD_ID_WRITE_PMEM;
-    off = first_dcr_range->addr - DCR_BYTE_ADDR;
-    write_uint32(buf + 1, DCR_BYTE_ADDR / 2);
-    write_uint16(buf + 5, DCR_BYTE_COUNT / 4);
+    buf[0] = CMD_ID_WRITE_CMEM;
     if (com_write(handle, buf)) goto on_error;
     if (com_read_ack(handle)) goto on_error;
     for (i = 0; i < DCR_BYTE_COUNT; i += 8)
     {
+      printf("write_dcr %u: 0x%08x 0x%08x\n",
+	     i,
+	     *(uint32_t*)(dcr_buf + i),
+	     *(uint32_t*)(dcr_buf + i + 4));
+
       if (com_write(handle, dcr_buf + i)) goto on_error;
       if (com_read_ack(handle)) goto on_error;
     }
     if (com_read_ack(handle)) goto on_error;
+
+    printf("[x] write DCR area\n");
   }
 #endif /* write dcr_buf */
 
@@ -282,7 +304,6 @@ static int do_read
   cmd_buf[0] = CMD_ID_READ_PMEM;
   write_uint32(cmd_buf + 1, addr);
   write_uint16(cmd_buf + 5, size);
-
   if (com_write(handle, cmd_buf)) goto on_error;
 
   /* command ack */

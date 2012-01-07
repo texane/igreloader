@@ -9,10 +9,16 @@
 #define ROW_BYTE_COUNT (ROW_WORD_COUNT * 4) /* 256 */
 #define PAGE_WORD_COUNT 512
 #define PAGE_BYTE_COUNT (PAGE_WORD_COUNT * 4) /* 2048 */
-#define DCR_BYTE_COUNT ((0xf80018 - 0xf80000) * 2)
 
-/* first DCR addr, in bytes */
+/* device configuration registers */
 #define DCR_BYTE_ADDR (0xf80000 * 2)
+#define DCR_WORD_COUNT ((0xf80018 - 0xf80000) / 2)
+#define DCR_BYTE_COUNT (DCR_WORD_COUNT * 4)
+
+/* device id */
+#define DEVID_BYTE_ADDR (0xff0000 * 2)
+#define DEVID_WORD_COUNT ((0xff0002 - 0xff0000) / 2)
+#define DEVID_BYTE_COUNT (DEVID_WORD_COUNT * 4)
 
 
 static inline unsigned int get_mem_flags(uint32_t addr, uint16_t size)

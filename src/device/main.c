@@ -297,6 +297,31 @@ static inline void flush_program_latches(void)
   );
 }
 
+static inline void write_conf_byte(uint16_t hi, uint16_t lo, uint16_t x)
+{
+  register uint16_t tmp asm("w7");
+
+  __asm__ __volatile__
+  (
+   "mov %1, TBLPAG \n\t"
+   "tblwtl %3, [ %2 ] \n\t"
+   "mov #0x4000, %0 \n\t"
+   "mov %4, NVMCON \n\t"
+   "disi #5 \n\t"
+   "mov #0x55, %0 \n\t"
+   "mov %4, NVMKEY \n\t"
+   "mov #0xaa, %0 \n\t"
+   "mov %4, NVMKEY \n\t"
+   "bset NVMCON, #15 \n\t"
+   "nop \n\t"
+   "nop \n\t"
+   "1: btsc NVMCON, #15 \n\t"
+   "bra 1b \n\t"
+   : "=&r"(tmp)
+   : "r"(hi), "r"(lo), "r"(x), "0"(tmp)
+  );
+}
+
 
 /* commands */
 
@@ -416,6 +441,36 @@ static void read_process_cmd(void)
 	/* frame ack */
 	com_read(cmd_buf);
       }
+
+      break ;
+    }
+
+  case CMD_ID_WRITE_CMEM:
+    {
+      /* write device configuration registers */
+
+      /* size in bytes */
+      size = (0xf80018 - 0xf80000) * 2;
+      addr = 0xf80000;
+
+      /* command ack */
+      com_write(cmd_buf);
+
+      /* receive the data */
+      for (i = 0; i < size; i += CMD_BUF_SIZE)
+      {
+	com_read(cmd_buf);
+
+	/* program one byte at a time */
+	for (j = 0; j < CMD_BUF_SIZE; j += 4, addr += 2)
+	  write_conf_byte(HI(addr), LO(addr), (uint16_t)cmd_buf[j]);
+
+	/* frame ack */
+	com_write(cmd_buf);
+      }
+
+      /* page programming ack */
+      com_write(cmd_buf);
 
       break ;
     }
