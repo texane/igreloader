@@ -484,8 +484,12 @@ static void read_process_cmd(void)
 
   case CMD_ID_GOTO:
     {
-      /* jump to the entrypoint */
       addr = read_uint32_unaligned(cmd_buf + 1);
+
+      /* command ack */
+      com_write(cmd_buf);
+
+      /* jump to the entrypoint */
       go_to(LO(addr));
       break ;
     }

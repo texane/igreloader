@@ -119,6 +119,7 @@ static int do_write
 )
 {
   const char* const filename = av[0];
+  const unsigned int noconf = (ac == 2 ? !strcmp(av[1], "noconf") : 0);
 
   hex_range_t* ranges;
   hex_range_t* pos;
@@ -212,7 +213,7 @@ static int do_write
   printf("[x] program code memory done\n");
 
 #if 1 /* write all device configuration registers in once */
-  if (first_dcr_range != NULL)
+  if ((noconf == 0) && (first_dcr_range != NULL))
   {
     /* in bytes, CMD_BUF_SIZE to avoid last read overflow */
     uint8_t dcr_buf[DCR_BYTE_COUNT + CMD_BUF_SIZE];
@@ -347,6 +348,7 @@ static int do_goto
   cmd_buf[0] = CMD_ID_GOTO;
   write_uint32(cmd_buf + 1, addr);
   if (com_write(handle, cmd_buf)) return -1;
+  if (com_read_ack(handle)) return -1;
   return 0;
 }
 
@@ -382,11 +384,10 @@ static int do_status
   for (i = 0; i < n; ++i)
   {
     buf[0] = CMD_ID_STATUS;
-    buf[1] = (uint8_t)bootids[i];
     if (com_write(handle, buf)) goto on_error;
     ret = com_read_timeout(handle, buf, 1000);
     if (ret == -1) goto on_error;
-    printf("device %02x: %c\n", bootids[i], ret == -2 ? 'x' : '!');
+    printf("device %02x: [%c]\n", bootids[i], ret == -2 ? '!' : 'x');
   }
 
   /* success */
@@ -402,7 +403,7 @@ static int do_status
 int main(int ac, char** av)
 {
   /* command lines:
-     ./a.out write <serial_device> <bootid> <file.hex>
+     ./a.out write <serial_device> <bootid> <file.hex> <noconf>
      ./a.out read <serial_device> <bootid> <addr> <size>
      ./a.out goto <serial_device> <bootid> <addr>
      ./a.out status <serial_device> <bootid>
