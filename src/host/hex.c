@@ -188,6 +188,7 @@ int hex_read_ranges(const char* filename, hex_range_t** first_range)
 
       /* allocate and fill range */
       cur_range = malloc(offsetof(hex_range_t, buf) + count);
+      cur_range->off = 0;
       cur_range->next = NULL;
       cur_range->prev = prev_range;
       cur_range->addr = (hiaddr << 16) | loaddr;
@@ -349,6 +350,7 @@ static void hex_paginate_ranges(hex_range_t** ranges)
   {
     /* create a new range */
     new_range = malloc(offsetof(hex_range_t, buf), sumed_size);
+    new_range->off = 0;
     new_range->next = NULL;
     new_range->prev = prev_range;
     new_range->addr = first_range->addr + first_off;
@@ -438,6 +440,7 @@ void hex_merge_ranges(hex_range_t** ranges)
 
     /* create a merged range */
     cur_range = malloc(offsetof(hex_range_t, buf) + size);
+    cur_range->off = 0;
     cur_range->next = NULL;
     cur_range->prev = prev_range;
     cur_range->addr = first->addr;

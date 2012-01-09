@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <stddef.h>
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/time.h>
@@ -123,11 +124,15 @@ static int do_write
 
   hex_range_t* ranges;
   hex_range_t* pos;
+  hex_range_t* new_range;
+  hex_range_t* next_pos;
   hex_range_t* first_dcr_range = NULL;
   unsigned int flags;
   size_t off;
   size_t i;
+  size_t new_size;
   size_t page_size;
+  uint32_t last_addr;
   uint8_t buf[CMD_BUF_SIZE];
 
   if (hex_read_ranges(filename, &ranges) == -1)
@@ -142,32 +147,97 @@ static int do_write
     goto on_error;
   }
 
+  /* merge contiguous lines as one block */
   hex_merge_ranges(&ranges);
+
+  /* remove bootloader reserved areas */
+  for (pos = ranges; pos != NULL; pos = next_pos)
+  {
+    next_pos = pos->next;
+
+    /* [ 0x0000 - 0x0008 [: dont overwrite 2 reserved instructions */
+    if (pos->addr < 0x0008)
+    {
+      off = (size_t)(0x0008 - pos->addr);
+      pos->off += off;
+      pos->size -= off;
+      pos->addr = 0x0008;
+      continue ;
+    }
+
+    /* [ 0x0800 - 0x1000 [: reserved bootloader area */
+#define FIRST_BOOT_ADDR (0x200 * 2)
+#define LAST_BOOT_ADDR (0x800 * 2)
+
+    last_addr = pos->addr + pos->size;
+
+    /* check if the range overlaps boot area. 4 cases to handle. */
+    if ((pos->addr < FIRST_BOOT_ADDR) && (last_addr > LAST_BOOT_ADDR))
+    {
+      /* range left and right sides span boot area */
+      /* resize left, create a new range for right */
+
+      /* create new range */
+      new_size = last_addr - LAST_BOOT_ADDR;
+      new_range = malloc(offsetof(hex_range_t, buf) + new_size);
+      new_range->off = 0;
+      new_range->next = pos;
+      new_range->prev = pos->next;
+      new_range->addr = LAST_BOOT_ADDR;
+      new_range->size = new_size;
+      off = LAST_BOOT_ADDR - pos->addr;
+      memcpy(new_range->buf, pos->buf + pos->off + off, new_size);
+
+      /* link new range */
+      if (pos->next != NULL) pos->next->prev = new_range;
+      pos->next = new_range;
+
+      /* update the current range */
+      pos->size -= new_size + (LAST_BOOT_ADDR - FIRST_BOOT_ADDR);
+    }
+    else if (pos->addr < FIRST_BOOT_ADDR)
+    {
+      /* left side spans boot area */
+      off = (size_t)(last_addr - FIRST_BOOT_ADDR);
+      pos->size -= off;
+    }
+    else if (last_addr > LAST_BOOT_ADDR)
+    {
+      /* right side spans boot area */
+      off = (size_t)(LAST_BOOT_ADDR - pos->addr);
+      pos->addr = LAST_BOOT_ADDR;
+      pos->off += off;
+      pos->size -= off;
+    }
+    else if ((pos->addr >= FIRST_BOOT_ADDR) && (last_addr <= LAST_BOOT_ADDR))
+    {
+      /* range is fully included in boot area, remove */
+
+      if (pos->next != NULL) pos->next->prev = pos->prev;
+
+      if (pos->prev == NULL)
+      {
+	ranges = pos->next;
+	if (ranges != NULL) ranges->prev = NULL;
+      }
+      else pos->prev->next = pos->next;
+
+      free(pos);
+    }
+    else
+    {
+      /* range does not span boot area */
+      if (pos->addr >= LAST_BOOT_ADDR)
+      {
+	/* range area sorted by addr, can break */
+	break ;
+      }
+    }
+  }
 
   /* for each range in program memory, write pages */
   for (pos = ranges; pos != NULL; pos = pos->next)
   {
-    /* skip first 2 words (goto, reset addr) */
-    if (pos->addr < 0x0008)
-    {
-      pos->size -= 0x0008 - pos->addr;
-      pos->addr = 0x0008;
-    }
-
-    /* [ 0x200 - 0x800 [ reserved for bootloader */
-#define FIRST_BOOTLOADER_ADDR (0x200 * 2)
-#define LAST_BOOTLOADER_ADDR (0x800 * 2)
-    const uint32_t last_addr = pos->addr + pos->size;
-    if ((last_addr >= FIRST_BOOTLOADER_ADDR) && (last_addr <= LAST_BOOTLOADER_ADDR))
-    {
-      printf("old: %x %u\n", pos->addr, pos->size);
-
-      pos->size -= LAST_BOOTLOADER_ADDR - pos->addr;
-      pos->addr = LAST_BOOTLOADER_ADDR;
-
-      printf("new: %x %u\n", pos->addr, pos->size);
-    }
-
     printf("write: [ %x %x [\n", pos->addr, pos->addr + pos->size);
 
     if (pos->size == 0)

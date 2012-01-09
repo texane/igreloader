@@ -13,7 +13,11 @@ typedef struct hex_range
 
   uint32_t addr;
 
+  /* off is an offset in buf */
+  size_t off;
+  /* size does not include off */
   size_t size;
+  /* buf total size is off + size */
   uint8_t buf[1];
 
 } hex_range_t;
