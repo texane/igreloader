@@ -136,20 +136,47 @@ static int do_write
     goto on_error;
   }
 
-  hex_merge_ranges(&ranges);
+  if (ranges == NULL)
+  {
+    printf("no range to write\n");
+    goto on_error;
+  }
 
-  hex_print_ranges(ranges);
+  hex_merge_ranges(&ranges);
 
   /* for each range in program memory, write pages */
   for (pos = ranges; pos != NULL; pos = pos->next)
   {
-    flags = get_mem_flags(pos->addr, pos->size);
+    /* skip first 2 words (goto, reset addr) */
+    if (pos->addr < 0x0008)
+    {
+      pos->size -= 0x0008 - pos->addr;
+      pos->addr = 0x0008;
+    }
+
+    /* [ 0x200 - 0x800 [ reserved for bootloader */
+#define FIRST_BOOTLOADER_ADDR (0x200 * 2)
+#define LAST_BOOTLOADER_ADDR (0x800 * 2)
+    const uint32_t last_addr = pos->addr + pos->size;
+    if ((last_addr >= FIRST_BOOTLOADER_ADDR) && (last_addr <= LAST_BOOTLOADER_ADDR))
+    {
+      printf("old: %x %u\n", pos->addr, pos->size);
+
+      pos->size -= LAST_BOOTLOADER_ADDR - pos->addr;
+      pos->addr = LAST_BOOTLOADER_ADDR;
+
+      printf("new: %x %u\n", pos->addr, pos->size);
+    }
+
+    printf("write: [ %x %x [\n", pos->addr, pos->addr + pos->size);
 
     if (pos->size == 0)
     {
       printf("warning: pos->size == 0\n");
       continue ;
     }
+
+    flags = get_mem_flags(pos->addr, pos->size);
 
     if (flags & MEM_FLAG_RESERVED)
     {
@@ -164,21 +191,20 @@ static int do_write
       continue ;
     }
 
-    /* user code relocated */
-    pos->addr += 0x8000;
-
     /* handle unaligned first page */
     off = 0;
     page_size = PAGE_BYTE_COUNT - (pos->addr % PAGE_BYTE_COUNT);
+
+    continue ;
 
     while (1)
     {
       /* check if bigger than */
       if ((off + page_size) > pos->size) page_size = pos->size - off;
 
-      printf("CMD_ID_WRITE_PMEM(%x, %u)\n",
+      printf("CMD_ID_WRITE_PMEM [ %x, %x [\n",
 	     (pos->addr + off) / 2,
-	     page_size / 4);
+	     (pos->addr + off) / 2 + page_size / 4);
 
       /* initiate write sequence */
       buf[0] = CMD_ID_WRITE_PMEM;
