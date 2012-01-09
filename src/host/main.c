@@ -181,8 +181,8 @@ static int do_write
       new_size = last_addr - LAST_BOOT_ADDR;
       new_range = malloc(offsetof(hex_range_t, buf) + new_size);
       new_range->off = 0;
-      new_range->next = pos;
-      new_range->prev = pos->next;
+      new_range->next = pos->next;
+      new_range->prev = pos;
       new_range->addr = LAST_BOOT_ADDR;
       new_range->size = new_size;
       off = LAST_BOOT_ADDR - pos->addr;
@@ -238,8 +238,6 @@ static int do_write
   /* for each range in program memory, write pages */
   for (pos = ranges; pos != NULL; pos = pos->next)
   {
-    printf("write: [ %x %x [\n", pos->addr, pos->addr + pos->size);
-
     if (pos->size == 0)
     {
       printf("warning: pos->size == 0\n");
@@ -264,8 +262,6 @@ static int do_write
     /* handle unaligned first page */
     off = 0;
     page_size = PAGE_BYTE_COUNT - (pos->addr % PAGE_BYTE_COUNT);
-
-    continue ;
 
     while (1)
     {
