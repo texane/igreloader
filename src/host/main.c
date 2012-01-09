@@ -195,13 +195,13 @@ static int do_write
       /* update the current range */
       pos->size -= new_size + (LAST_BOOT_ADDR - FIRST_BOOT_ADDR);
     }
-    else if (pos->addr < FIRST_BOOT_ADDR)
+    else if ((pos->addr < FIRST_BOOT_ADDR) && (last_addr > FIRST_BOOT_ADDR))
     {
       /* left side spans boot area */
       off = (size_t)(last_addr - FIRST_BOOT_ADDR);
       pos->size -= off;
     }
-    else if (last_addr > LAST_BOOT_ADDR)
+    else if ((pos->addr < LAST_BOOT_ADDR) && (last_addr > LAST_BOOT_ADDR))
     {
       /* right side spans boot area */
       off = (size_t)(LAST_BOOT_ADDR - pos->addr);
