@@ -270,7 +270,7 @@ static int do_write
 
       printf("CMD_ID_WRITE_PMEM [ %x, %x [\n",
 	     (pos->addr + off) / 2,
-	     (pos->addr + off) / 2 + page_size / 4);
+	     (pos->addr + off + page_size) / 2);
 
       /* initiate write sequence */
       buf[0] = CMD_ID_WRITE_PMEM;
@@ -284,7 +284,7 @@ static int do_write
       /* send the page 8 bytes (2 program words) at a time */
       for (i = 0; i < page_size; i += 8)
       {
-	if (com_write(handle, pos->buf + off + i)) goto on_error;
+	if (com_write(handle, pos->buf + pos->off + off + i)) goto on_error;
 
 	/* frame ack */
 	if (com_read_ack(handle)) goto on_error;
@@ -336,7 +336,7 @@ static int do_write
       if (!(flags & MEM_FLAG_DCR)) break ;
 
       off = pos->addr - DCR_BYTE_ADDR;
-      memcpy(dcr_buf + off, pos->buf, pos->size);
+      memcpy(dcr_buf + off, pos->buf + pos->off, pos->size);
     }
 
     printf("write DCR area\n");
@@ -347,11 +347,6 @@ static int do_write
     if (com_read_ack(handle)) goto on_error;
     for (i = 0; i < DCR_BYTE_COUNT; i += 8)
     {
-      printf("write_dcr %u: 0x%08x 0x%08x\n",
-	     i,
-	     *(uint32_t*)(dcr_buf + i),
-	     *(uint32_t*)(dcr_buf + i + 4));
-
       if (com_write(handle, dcr_buf + i)) goto on_error;
       if (com_read_ack(handle)) goto on_error;
     }
