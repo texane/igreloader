@@ -81,6 +81,35 @@
       <C30-AS>
       </C30-AS>
       <C30-LD>
+        <property key="preprocessor-macros" value=""/>
+        <property key="general-code-protect" value="no_code_protect"/>
+        <property key="secure-write-protect" value="no_write_protect"/>
+        <property key="warn-section-align" value="false"/>
+        <property key="heap-size" value=""/>
+        <property key="remove-unused-sections" value="false"/>
+        <property key="stack-size" value=""/>
+        <property key="linker-symbols" value=""/>
+        <property key="trace-symbols" value=""/>
+        <property key="map-file" value=""/>
+        <property key="enable-pack-data" value="true"/>
+        <property key="boot-eeprom" value="no_eeprom"/>
+        <property key="general-write-protect" value="no_write_protect"/>
+        <property key="enable-handles" value="true"/>
+        <property key="enable-data-init" value="true"/>
+        <property key="secure-flash" value="no_flash"/>
+        <property key="boot-write-protect" value="no_write_protect"/>
+        <property key="boot-flash" value="no_flash"/>
+        <property key="report-memory-usage" value="false"/>
+        <property key="generate-cross-reference-file" value="false"/>
+        <property key="input-libraries" value=""/>
+        <property key="secure-ram" value="no_ram"/>
+        <property key="enable-check-sections" value="false"/>
+        <property key="enable-default-isr" value="true"/>
+        <property key="symbol-stripping" value=""/>
+        <property key="boot-ram" value="no_ram"/>
+        <property key="secure-eeprom" value="no_eeprom"/>
+        <property key="extra-lib-directories" value=""/>
+        <appendMe value="-Ttext,0x400"/>
       </C30-LD>
       <C30Global>
         <property key="fast-math" value="false"/>
