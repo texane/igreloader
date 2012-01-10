@@ -12,7 +12,6 @@ _FBS(BWRP_WRPROTECT_OFF);
 
 int main(void)
 {
-#if 0
   register unsigned int i;
   register unsigned int j;
 
@@ -31,11 +30,6 @@ int main(void)
   PORTAbits.RA0 = 1;
 
   goto redo;
-#else
-  TRISAbits.TRISA0 = 0;
-  PORTAbits.RA0 = 1;
-  while (1) ;
-#endif
 
   return 0;
 }
