@@ -374,7 +374,7 @@ static void read_process_cmd(void)
 	addr -= off;
 
 	/* offset in bytes */
-	off *= 4;
+	off *= 2;
 
 	/* read one word at a time */
 	for (i = 0, j = 0; i < PAGE_BYTE_COUNT; i += 4, j += 2)
