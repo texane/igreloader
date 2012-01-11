@@ -17,7 +17,7 @@ MEMORY
   reset          : ORIGIN = 0x0,           LENGTH = 0x4
   ivt            : ORIGIN = 0x4,           LENGTH = 0xFC
   aivt           : ORIGIN = 0x104,         LENGTH = 0xFC
-  program (xr)   : ORIGIN = 0x800,         LENGTH = 0x155FE
+  program (xr)   : ORIGIN = 0x800,         LENGTH = 0x140000
   FBS            : ORIGIN = 0xF80000,      LENGTH = 0x2
   FSS            : ORIGIN = 0xF80002,      LENGTH = 0x2
   FGS            : ORIGIN = 0xF80004,      LENGTH = 0x2
@@ -53,7 +53,7 @@ __YDATA_BASE = 0x2800;
 __DMA_BASE = 0x4000;
 __DMA_END = 0x47FF;
 __CODE_BASE = 0x800;
-__CODE_LENGTH = 0x14D00;
+__CODE_LENGTH = 0x15000;
 
 
 /*
@@ -105,22 +105,7 @@ SECTIONS
         KEEP (*(.isr*));
         *(.libc) *(.libm) *(.libdsp);  /* keep together in this order */
         *(.lib*);
-  } >program
 
-
-  /*
-  ** User-Defined Section in Program Memory
-  **
-  ** note: can specify an address using
-  **       the following syntax:
-  **
-  **       usercode 0x1234 :
-  **         {
-  **           *(usercode);
-  **         } >program
-  */
-  usercode :
-  {
         *(usercode);
   } >program
 
