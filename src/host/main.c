@@ -110,6 +110,16 @@ static inline int com_write_ack(serial_handle_t* handle)
 }
 
 
+/* dump program memory buffer */
+
+__attribute__((unused))
+static void dump_pmem(uint32_t x, const uint8_t* s, size_t n)
+{
+  for (; n; --n, s += sizeof(uint32_t), x += 2)
+    printf("%08x: %08x\n", x, *(uint32_t*)s);
+}
+
+
 /* write hex file to device memory */
 
 static int do_write
@@ -158,11 +168,13 @@ static int do_write
     /* [ 0x0000 - 0x0008 [: dont overwrite 2 reserved instructions */
     if (pos->addr < 0x0008)
     {
-      off = (size_t)(0x0008 - pos->addr);
+      last_addr = pos->addr + pos->size;
+      if (last_addr > 0x0008) last_addr = 0x0008;
+
+      off = (size_t)(last_addr - pos->addr);
       pos->off += off;
       pos->size -= off;
-      pos->addr = 0x0008;
-      continue ;
+      pos->addr = last_addr;
     }
 
     /* [ 0x0800 - 0x1000 [: reserved bootloader area */
@@ -198,12 +210,14 @@ static int do_write
     else if ((pos->addr < FIRST_BOOT_ADDR) && (last_addr > FIRST_BOOT_ADDR))
     {
       /* left side spans boot area */
+
       off = (size_t)(last_addr - FIRST_BOOT_ADDR);
       pos->size -= off;
     }
     else if ((pos->addr < LAST_BOOT_ADDR) && (last_addr > LAST_BOOT_ADDR))
     {
       /* right side spans boot area */
+
       off = (size_t)(LAST_BOOT_ADDR - pos->addr);
       pos->addr = LAST_BOOT_ADDR;
       pos->off += off;
