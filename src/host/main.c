@@ -177,7 +177,7 @@ static int do_write
       pos->addr = last_addr;
     }
 
-    /* [ 0x0800 - 0x1000 [: reserved bootloader area */
+    /* [ 0x0200 - 0x0800 [: reserved bootloader area */
 #define FIRST_BOOT_ADDR (0x200 * 2)
 #define LAST_BOOT_ADDR (0x800 * 2)
 
