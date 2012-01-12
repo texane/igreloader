@@ -54,7 +54,7 @@ static void osc_setup(void)
 
 /* ecan */
 
-uint16_t ecan_bufs[4][8] __attribute__((space(dma), aligned(16)));
+uint16_t ecan_bufs[4][8] __attribute__((space(dma), aligned(4 * 16)));
 
 #if CONFIG_USE_INTERRUPT
 
@@ -371,8 +371,6 @@ int main(void)
 
   AD1PCFGL = 0xFFFF;
 
-  TRISAbits.TRISA0 = 0;
-
   osc_setup();
   uart_setup();
   ecan_setup();
@@ -385,20 +383,14 @@ int main(void)
     if (uart_is_rx())
     {
       uart_read(&id, buf);
-      uart_write(id, buf);
-
       ecan_write(id, buf);
     }
 
     buf_index = ecan_is_rx();
     if (buf_index)
     {
-      PORTAbits.RA0 ^= 1;
       ecan_read(buf_index, &id, buf);
-
-#if 0
       uart_write(id, buf);
-#endif
     }
 
 #endif
