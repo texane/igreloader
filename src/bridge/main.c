@@ -105,7 +105,7 @@ static void ecan_setup(void)
   TRISBbits.TRISB7 = 0;
 
   /* configuration mode */
-  C1CTRL1bits.REQOP=4;
+  C1CTRL1bits.REQOP = 4;
   while (C1CTRL1bits.OPMODE != 4);
 			
   /* FCAN is selected to be FCY */
@@ -142,9 +142,15 @@ static void ecan_setup(void)
   /* clear window bit to access ECAN control registers */
   C1CTRL1bits.WIN = 0;
 
+#if 0
   /* put the module in normal mode */
   C1CTRL1bits.REQOP = 0;
   while (C1CTRL1bits.OPMODE != 0) ;
+#else
+  /* put the module in loopback mode */
+  C1CTRL1bits.REQOP = 2;
+  while (C1CTRL1bits.OPMODE != 2) ;
+#endif
 
   C1RXFUL1 = 0;
   C1RXFUL2 = 0;
@@ -270,8 +276,6 @@ static void uart_setup(void)
 #define CONFIG_UART_TXTRIS TRISBbits.TRISB14
 #define CONFIG_UART_TXPIN RPOR7bits.RP14R
 
-  AD1PCFGL = 0xFFFF;
-
   RPINR18bits.U1RXR = CONFIG_UART_RXPIN;
   CONFIG_UART_RXTRIS = 1;
   CONFIG_UART_TXTRIS = 0;
@@ -303,9 +307,14 @@ static void uart_write(uint16_t id, uint8_t* s)
 {
   unsigned int i;
 
+#if 0 /* fixme, bug */
   /* write id, little first */
-  uart_write_uint8(id & 0xff);
-  uart_write_uint8(id >> 8);
+  uart_write_uint8((uint8_t)(id & 0xff));
+  uart_write_uint8((uint8_t)(id >> 8));
+#else
+  uart_write_uint8(0x2a);
+  uart_write_uint8(0x2a);
+#endif /* fixme */
 
   for (i = 0; i < CAN_DATA_SIZE; ++i, ++s)
     uart_write_uint8(*s);
@@ -360,6 +369,10 @@ int main(void)
   unsigned int buf_index;
 #endif
 
+  AD1PCFGL = 0xFFFF;
+
+  TRISAbits.TRISA0 = 0;
+
   osc_setup();
   uart_setup();
   ecan_setup();
@@ -372,15 +385,22 @@ int main(void)
     if (uart_is_rx())
     {
       uart_read(&id, buf);
+      uart_write(id, buf);
+
       ecan_write(id, buf);
     }
 
     buf_index = ecan_is_rx();
     if (buf_index)
     {
+      PORTAbits.RA0 ^= 1;
       ecan_read(buf_index, &id, buf);
+
+#if 0
       uart_write(id, buf);
+#endif
     }
+
 #endif
   }
 
