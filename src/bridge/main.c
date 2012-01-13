@@ -286,11 +286,11 @@ static inline uint8_t uart_read_uint8(void)
 
 static void uart_read(uint16_t* id, uint8_t* s)
 {
-  unsigned int i;
+  uint16_t i;
 
   /* id sent little endian */
-  i = uart_read_uint8();
-  *id = (uart_read_uint8() << 8) | (uint8_t)i;
+  i = (uint16_t)uart_read_uint8();
+  *id = ((uint16_t)uart_read_uint8() << 8) | i;
 
   for (i = 0; i < CAN_DATA_SIZE; ++i, ++s)
     *s = uart_read_uint8();

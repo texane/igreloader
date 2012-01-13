@@ -15,7 +15,7 @@
 
 
 /* set to 0 if endpoint is not a serial to CAN bridge */
-#define CONFIG_USE_CAN_BRIDGE 0
+#define CONFIG_USE_CAN_BRIDGE 1
 
 
 /* communication routines */
@@ -72,7 +72,7 @@ static inline int com_read(serial_handle_t* handle, uint16_t sid, uint8_t* buf)
   while (1)
   {
     if (serial_readn(handle, (void*)&xxx, sizeof(uint16_t))) return -1;
-    if (xxx == sid) break ;
+    if (MASK_CAN_PRIO_ID(xxx) == MASK_CAN_PRIO_ID(sid)) break ;
     /* filter messages */
     if (serial_readn(handle, buf, CMD_BUF_SIZE)) return -1;
   }

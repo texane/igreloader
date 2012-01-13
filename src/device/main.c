@@ -52,13 +52,7 @@ static void osc_setup(void)
 static inline uint16_t get_boot_id(void)
 {
 #define CONFIG_BOOT_ID 2
-
-#if defined(CONFIG_BOOT_ID)
   return CONFIG_BOOT_ID;
-#else
-  /* todo: read from dip switch */
-  return 0;
-#endif
 }
 
 
@@ -109,7 +103,7 @@ static inline void delay(void)
 
 /* communication layer */
 
-#define CONFIG_USE_ECAN 0
+#define CONFIG_USE_ECAN 1
 
 #if CONFIG_USE_ECAN
 
@@ -173,7 +167,7 @@ static void ecan_setup(uint16_t id)
   C1FMSKSEL1bits.F0MSK = 0;
 
   /* accept boot group messages targeted to id, whatever prio */
-  C1RXM0SID = (0x3f7 << 5) | (1 << 3); /* mide bit */
+  C1RXM0SID = (0x1ff << 5) | (1 << 3); /* mide bit */
   C1RXF0SID = MAKE_CAN_SID(0, BOOT_GROUP_ID, id) << 5;
 
   /* use buffer 1 for incoming messages */
@@ -649,6 +643,8 @@ int main(void)
     go_to();
   }
 #endif /* todo */
+
+  AD1PCFGL = 0xFFFF;
 
   osc_setup();
 
