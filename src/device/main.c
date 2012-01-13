@@ -109,7 +109,7 @@ static inline void delay(void)
 
 /* communication layer */
 
-#define CONFIG_USE_ECAN 1
+#define CONFIG_USE_ECAN 0
 
 #if CONFIG_USE_ECAN
 

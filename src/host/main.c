@@ -15,7 +15,7 @@
 
 
 /* set to 0 if endpoint is not a serial to CAN bridge */
-#define CONFIG_USE_CAN_BRIDGE 1
+#define CONFIG_USE_CAN_BRIDGE 0
 
 
 /* communication routines */
@@ -192,9 +192,10 @@ static int do_write
       pos->addr = last_addr;
     }
 
-    /* [ 0x0200 - 0x0800 [: reserved bootloader area */
+    /* reserved bootloader area */
+    /* warning: must match device.X/igreboot_p33FJ128GP802.gld */
 #define FIRST_BOOT_ADDR (0x200 * 2)
-#define LAST_BOOT_ADDR (0x800 * 2)
+#define LAST_BOOT_ADDR (0x600 * 2)
 
     last_addr = pos->addr + pos->size;
 
