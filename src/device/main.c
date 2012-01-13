@@ -213,7 +213,7 @@ static void ecan_write(uint8_t* s)
 #define HOST_NODE_ID 0x0000
 #define BOOT_GROUP_ID 0x0000
 #define LOW_PRIO_ID 0x0000
-#define MAKE_CAN_ID(__p, __g, __n) (((__p) << 8) | ((__g) << 5) | __n)
+#define MAKE_CAN_ID(__p, __g, __n) (((__p) << 9) | ((__g) << 3) | __n)
   ecan_tx_buf[0] = MAKE_CAN_ID( LOW_PRIO_ID, BOOT_GROUP_ID, HOST_NODE_ID );
 
   ecan_tx_buf[1] = 0;
