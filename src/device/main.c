@@ -49,7 +49,7 @@ static void osc_setup(void)
 
 /* self boot id */
 
-static inline uint8_t get_boot_id(void)
+static inline uint16_t get_boot_id(void)
 {
 #define CONFIG_BOOT_ID 2
 
@@ -115,7 +115,7 @@ static inline void delay(void)
 
 uint16_t ecan_bufs[4][8] __attribute__((space(dma), aligned(4 * 16)));
 
-static void ecan_setup(uint8_t id)
+static void ecan_setup(uint16_t id)
 {
   /* baud rate */
 #define FCAN 40000000 
@@ -172,11 +172,9 @@ static void ecan_setup(uint8_t id)
   /* select acceptance mask 0 filter 0 buffer 1 */
   C1FMSKSEL1bits.F0MSK = 0;
 
-  /* accept all standard sids */
-  C1RXM0SID = 0;
-  C1RXF0SID = 0;
-  C1RXM0SID = 0x0008; /* mide bit */
-  C1RXF0SID = 0;
+  /* accept boot group messages targeted to id */
+  C1RXM0SID = (0xff7 << 5) | (1 << 3); /* mide bit */
+  C1RXF0SID = MAKE_CAN_SID(HIGH_PRIO_ID, BOOT_GROUP_ID, id) << 5;
 
   /* use buffer 1 for incoming messages */
   C1BUFPNT1bits.F0BP = 1;
@@ -210,11 +208,7 @@ static void ecan_write(uint8_t* s)
   /* wait for previous transmission to end */
   while (C1TR01CONbits.TXREQ0) ;
 
-#define HOST_NODE_ID 0x0000
-#define BOOT_GROUP_ID 0x0000
-#define LOW_PRIO_ID 0x0000
-#define MAKE_CAN_ID(__p, __g, __n) (((__p) << 9) | ((__g) << 3) | __n)
-  ecan_tx_buf[0] = MAKE_CAN_ID( LOW_PRIO_ID, BOOT_GROUP_ID, HOST_NODE_ID );
+  ecan_tx_buf[0] = MAKE_CAN_SID( HIGH_PRIO_ID, BOOT_GROUP_ID, HOST_NODE_ID ) << 2;
 
   ecan_tx_buf[1] = 0;
 #define CAN_DATA_SIZE 8
@@ -270,7 +264,7 @@ static void ecan_read(uint8_t* s)
 
 #else /* CONFIG_USE_UART */
 
-static void uart_setup(uint8_t id)
+static void uart_setup(uint16_t id)
 {
 #define CONFIG_UART_BAUDRATE 38400
 #define BRGVAL ((OSC_FCY / (16 * CONFIG_UART_BAUDRATE)) - 1)
@@ -616,7 +610,13 @@ static void read_process_cmd(void)
   case CMD_ID_STATUS:
     {
       /* todo: reply status */
+
+      /* debugging */
+      for (i = 0; i < CMD_BUF_SIZE; ++i)
+	cmd_buf[i] = 'a' + (uint8_t)i;
+
       com_write(cmd_buf);
+
       break ;
     }
 
