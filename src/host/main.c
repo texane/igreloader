@@ -63,16 +63,16 @@ static int com_write(serial_handle_t* handle, uint16_t sid, const uint8_t* buf)
   return (size == 0) ? 0 : -1;
 }
 
-static inline int com_read(serial_handle_t* handle, uint16_t sid, uint8_t* buf)
+static inline int com_read(serial_handle_t* handle, uint8_t* buf)
 {
 #if CONFIG_USE_CAN_BRIDGE
 
-  uint16_t xxx;
+  uint16_t sid;
 
   while (1)
   {
-    if (serial_readn(handle, (void*)&xxx, sizeof(uint16_t))) return -1;
-    if (MASK_CAN_PRIO_ID(xxx) == MASK_CAN_PRIO_ID(sid)) break ;
+    if (serial_readn(handle, (void*)&sid, sizeof(uint16_t))) return -1;
+    if (MASK_CAN_PRIO_ID(sid) == HOST_NODE_ID) break ;
     /* filter messages */
     if (serial_readn(handle, buf, CMD_BUF_SIZE)) return -1;
   }
@@ -83,7 +83,7 @@ static inline int com_read(serial_handle_t* handle, uint16_t sid, uint8_t* buf)
 }
 
 static inline int com_read_timeout
-(serial_handle_t* handle, uint16_t sid, uint8_t* buf, unsigned int ms)
+(serial_handle_t* handle, uint8_t* buf, unsigned int ms)
 {
   /* ms the timeout, in milliseconds */
   /* return -2 on timeout */
@@ -102,7 +102,7 @@ static inline int com_read_timeout
   if (err == 1)
   {
     /* no timeout */
-    return com_read(handle, sid, buf);
+    return com_read(handle, buf);
   }
 
   /* timeout or error */
@@ -114,9 +114,9 @@ static inline int com_read_timeout
 
 static uint8_t dummy_buf[CMD_BUF_SIZE];
 
-static inline int com_read_ack(serial_handle_t* handle, uint16_t sid)
+static inline int com_read_ack(serial_handle_t* handle)
 {
-  return com_read(handle, sid, dummy_buf);
+  return com_read(handle, dummy_buf);
 }
 
 static inline int com_write_ack(serial_handle_t* handle, uint16_t sid)
@@ -309,7 +309,7 @@ static int do_write
       if (com_write(handle, sid, buf)) goto on_error;
 
       /* command ack */
-      if (com_read_ack(handle, sid)) goto on_error;
+      if (com_read_ack(handle)) goto on_error;
 
       /* send the page 8 bytes (2 program words) at a time */
       for (i = 0; i < page_size; i += 8)
@@ -318,11 +318,11 @@ static int do_write
 	  goto on_error;
 
 	/* frame ack */
-	if (com_read_ack(handle, sid)) goto on_error;
+	if (com_read_ack(handle)) goto on_error;
       }
 
       /* page programming ack */
-      if (com_read_ack(handle, sid)) goto on_error;
+      if (com_read_ack(handle)) goto on_error;
 
       /* next page or done */
       off += page_size;
@@ -350,10 +350,10 @@ static int do_write
     write_uint32(buf + 1, DCR_BYTE_ADDR / 2);
     write_uint16(buf + 5, DCR_BYTE_COUNT / 4);
     if (com_write(handle, sid, buf)) goto on_error;
-    if (com_read_ack(handle, sid)) goto on_error;
+    if (com_read_ack(handle)) goto on_error;
     for (i = 0; i < DCR_BYTE_COUNT; i += 8)
     {
-      if (com_read(handle, sid, dcr_buf + i)) goto on_error;
+      if (com_read(handle, dcr_buf + i)) goto on_error;
       if (com_write_ack(handle, sid)) goto on_error;
     }
 
@@ -375,13 +375,13 @@ static int do_write
     /* write dcr_buf */
     buf[0] = CMD_ID_WRITE_CMEM;
     if (com_write(handle, sid, buf)) goto on_error;
-    if (com_read_ack(handle, sid)) goto on_error;
+    if (com_read_ack(handle)) goto on_error;
     for (i = 0; i < DCR_BYTE_COUNT; i += 8)
     {
       if (com_write(handle, sid, dcr_buf + i)) goto on_error;
-      if (com_read_ack(handle, sid)) goto on_error;
+      if (com_read_ack(handle)) goto on_error;
     }
-    if (com_read_ack(handle, sid)) goto on_error;
+    if (com_read_ack(handle)) goto on_error;
 
     printf("[x] write DCR area\n");
   }
@@ -426,11 +426,11 @@ static int do_read
   if (com_write(handle, sid, cmd_buf)) goto on_error;
 
   /* command ack */
-  if (com_read_ack(handle, sid)) goto on_error;
+  if (com_read_ack(handle)) goto on_error;
 
   for (i = 0; i < (size * 4); i += 8)
   {
-    if (com_read(handle, sid, read_buf + i)) goto on_error;
+    if (com_read(handle, read_buf + i)) goto on_error;
 
     /* frame ack */
     if (com_write_ack(handle, sid)) goto on_error;
@@ -466,7 +466,7 @@ static int do_goto
   cmd_buf[0] = CMD_ID_GOTO;
   write_uint32(cmd_buf + 1, addr);
   if (com_write(handle, sid, cmd_buf)) return -1;
-  if (com_read_ack(handle, sid)) return -1;
+  if (com_read_ack(handle)) return -1;
   return 0;
 }
 
@@ -506,7 +506,7 @@ static int do_status
 
     buf[0] = CMD_ID_STATUS;
     if (com_write(handle, sids[i], buf)) goto on_error;
-    ret = com_read_timeout(handle, sids[i], buf, 1000);
+    ret = com_read_timeout(handle, buf, 1000);
     if (ret == -1) goto on_error;
 
     printf("device %02x: [%c]\n", nodeid, ret == -2 ? '!' : 'x');
