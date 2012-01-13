@@ -64,6 +64,24 @@ static void ecan_setup(void)
 #define NTQ 10
 #define BRP_VAL ((FCAN / (2 * NTQ * BITRATE)) - 1)
 
+  /* setup dma channel 0 for tx buffer */
+  DMACS0 = 0;
+  DMA0CON = 0x2020; 
+  DMA0PAD = 0x0442;
+  DMA0CNT = 7;
+  DMA0REQ = 0x0046;	
+  DMA0STA = __builtin_dmaoffset(&ecan_bufs);
+  DMA0CONbits.CHEN = 1;
+	
+  /* setup dma channel 2 for rx buffer */
+  DMACS0 = 0;
+  DMA2CON = 0x0020;
+  DMA2PAD = 0x0440;	
+  DMA2CNT = 7;
+  DMA2REQ = 0x0022;	
+  DMA2STA = __builtin_dmaoffset(&ecan_bufs);
+  DMA2CONbits.CHEN = 1;
+
   /* setup pins */
   /* c1rx mapped to rb6 */
   /* c1tx mapped to rb7. refer to table 11-2. */
@@ -75,7 +93,7 @@ static void ecan_setup(void)
   /* configuration mode */
   C1CTRL1bits.REQOP = 4;
   while (C1CTRL1bits.OPMODE != 4);
-			
+
   /* FCAN is selected to be FCY */
   C1CTRL1bits.CANCKS = 0x1;
 
@@ -86,7 +104,7 @@ static void ecan_setup(void)
   C1CFG2bits.SEG2PH = 0x2;
   C1CFG2bits.PRSEG = 0x1;
   C1CFG2bits.SAM = 0x1;
-	
+
   /* 4 messages buffered in DMA RAM */
   C1FCTRLbits.DMABS = 0;
 
@@ -135,24 +153,6 @@ static void ecan_setup(void)
   /* clear the buffer full flags */
   C1RXFUL1 = 0;
   C1INTFbits.RBIF = 0;
-
-  /* setup dma channel 0 for tx buffer */
-  DMACS0 = 0;
-  DMA0CON = 0x2020; 
-  DMA0PAD = 0x0442;
-  DMA0CNT = 7;
-  DMA0REQ = 0x0046;	
-  DMA0STA = __builtin_dmaoffset(&ecan_bufs);
-  DMA0CONbits.CHEN = 1;
-	
-  /* setup the DMA channel 2 for rx buffer */
-  DMACS0 = 0;
-  DMA2CON = 0x0020;
-  DMA2PAD = 0x0440;	
-  DMA2CNT = 7;
-  DMA2REQ = 0x0022;	
-  DMA2STA = __builtin_dmaoffset(&ecan_bufs);
-  DMA2CONbits.CHEN = 1;
 
 #if CONFIG_USE_INTERRUPT
   IEC2bits.C1IE = 1;
@@ -242,6 +242,12 @@ static void uart_setup(void)
   IPC2bits.U1RXIP = 3;
   IEC0bits.U1RXIE = 1;
 #endif
+
+  /* from 70188b.pdf: wait 1 / baudrate before sending the first byte */
+  {
+    volatile uint16_t x;
+    for (x = 0; x < 10000; ++x) __asm__ __volatile__ ("nop");
+  }
 }
 
 static inline void uart_write_uint8(uint8_t x)
@@ -355,10 +361,8 @@ static uint8_t uart_buffer[2 + CAN_DATA_SIZE];
 
 static inline unsigned int uart_is_rx(void);
 
-void __attribute__((interrupt, no_auto_psv)) _U1RXInterrupt(void)
+void __attribute__((__interrupt__, no_auto_psv)) _U1RXInterrupt(void)
 {
-  IFS0bits.U1RXIF = 0;
-
   while (uart_is_rx())
   {
     uart_buffer[uart_index++] = U1RXREG;
@@ -366,25 +370,26 @@ void __attribute__((interrupt, no_auto_psv)) _U1RXInterrupt(void)
     if (uart_index == sizeof(uart_buffer))
     {
       const uint16_t id = *(uint16_t*)uart_buffer;
-
-      /* debugging */
-      uart_write(id, (uint8_t*)uart_buffer + 2);
-
-      ecan_write(id, (uint8_t*)uart_buffer + 2);
+      ecan_write(id, uart_buffer + 2);
       uart_index = 0;
+
+#if 0
+      /* debugging */
+      uart_write(id, uart_buffer + 2);
+#endif
     }
   }
+
+  IFS0bits.U1RXIF = 0;
 }
 
-void __attribute__((interrupt, no_auto_psv)) _U1TXInterrupt(void)
+void __attribute__((__interrupt__, no_auto_psv)) _U1TXInterrupt(void)
 {
   IFS0bits.U1TXIF = 0;
 }
 
-void __attribute__((interrupt, no_auto_psv)) _C1Interrupt(void)
+void __attribute__((__interrupt__, no_auto_psv)) _C1Interrupt(void)
 {
-  IFS2bits.C1IF = 0;
-
   if (C1INTFbits.TBIF)
   {
     C1INTFbits.TBIF = 0;
@@ -396,14 +401,16 @@ void __attribute__((interrupt, no_auto_psv)) _C1Interrupt(void)
     unsigned int buf_index;
     uint16_t id;
 
-    C1INTFbits.RBIF = 0;
-
     while ((buf_index = ecan_is_rx()) != 0)
     {
       ecan_read(buf_index, &id, buf);
       uart_write(id, buf);
     }
+
+    C1INTFbits.RBIF = 0;
   }
+
+  IFS2bits.C1IF = 0;
 }
 
 #endif /* CONFIG_USE_INTERRUPT */
