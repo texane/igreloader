@@ -172,9 +172,9 @@ static void ecan_setup(uint16_t id)
   /* select acceptance mask 0 filter 0 buffer 1 */
   C1FMSKSEL1bits.F0MSK = 0;
 
-  /* accept boot group messages targeted to id */
-  C1RXM0SID = (0xff7 << 5) | (1 << 3); /* mide bit */
-  C1RXF0SID = MAKE_CAN_SID(HIGH_PRIO_ID, BOOT_GROUP_ID, id) << 5;
+  /* accept boot group messages targeted to id, whatever prio */
+  C1RXM0SID = (0x3f7 << 5) | (1 << 3); /* mide bit */
+  C1RXF0SID = MAKE_CAN_SID(0, BOOT_GROUP_ID, id) << 5;
 
   /* use buffer 1 for incoming messages */
   C1BUFPNT1bits.F0BP = 1;

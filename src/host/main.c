@@ -14,11 +14,8 @@
 #include "../common/common.h"
 
 
-/* todo: once testing done, messages should
-   CAN frame info should directly be wrapped
-   into a serial frame so that the endpoint
-   acts as a serial to CAN bridge.
- */
+/* set to 0 if endpoint is not a serial to CAN bridge */
+#define CONFIG_USE_CAN_BRIDGE 1
 
 
 /* communication routines */
@@ -48,12 +45,16 @@ static inline void com_close(serial_handle_t* handle)
   serial_close(handle);
 }
 
-static int com_write(serial_handle_t* handle, const uint8_t* buf)
+static int com_write(serial_handle_t* handle, uint16_t sid, const uint8_t* buf)
 {
   size_t size = CMD_BUF_SIZE;
-  size_t tmp = 0;
+  size_t tmp;
 
-  for (; size; size -= tmp)
+#if CONFIG_USE_CAN_BRIDGE
+  if (serial_writen(handle, (const void*)&sid, sizeof(uint16_t))) return -1;
+#endif /* CONFIG_USE_CAN_BRIDGE */
+
+  for (tmp = 0; size; size -= tmp)
   {
     if (serial_write(handle, buf, size, &tmp))
       break ;
@@ -62,13 +63,27 @@ static int com_write(serial_handle_t* handle, const uint8_t* buf)
   return (size == 0) ? 0 : -1;
 }
 
-static inline int com_read(serial_handle_t* handle, uint8_t* buf)
+static inline int com_read(serial_handle_t* handle, uint16_t sid, uint8_t* buf)
 {
+#if CONFIG_USE_CAN_BRIDGE
+
+  uint16_t xxx;
+
+  while (1)
+  {
+    if (serial_readn(handle, (void*)&xxx, sizeof(uint16_t))) return -1;
+    if (xxx == sid) break ;
+    /* filter messages */
+    if (serial_readn(handle, buf, CMD_BUF_SIZE)) return -1;
+  }
+
+#endif /* CONFIG_USE_CAN_BRIDGE */
+
   return serial_readn(handle, buf, CMD_BUF_SIZE);
 }
 
 static inline int com_read_timeout
-(serial_handle_t* handle, uint8_t* buf, unsigned int ms)
+(serial_handle_t* handle, uint16_t sid, uint8_t* buf, unsigned int ms)
 {
   /* ms the timeout, in milliseconds */
   /* return -2 on timeout */
@@ -87,7 +102,7 @@ static inline int com_read_timeout
   if (err == 1)
   {
     /* no timeout */
-    return com_read(handle, buf);
+    return com_read(handle, sid, buf);
   }
 
   /* timeout or error */
@@ -99,14 +114,14 @@ static inline int com_read_timeout
 
 static uint8_t dummy_buf[CMD_BUF_SIZE];
 
-static inline int com_read_ack(serial_handle_t* handle)
+static inline int com_read_ack(serial_handle_t* handle, uint16_t sid)
 {
-  return com_read(handle, dummy_buf);
+  return com_read(handle, sid, dummy_buf);
 }
 
-static inline int com_write_ack(serial_handle_t* handle)
+static inline int com_write_ack(serial_handle_t* handle, uint16_t sid)
 {
-  return com_write(handle, dummy_buf);
+  return com_write(handle, sid, dummy_buf);
 }
 
 
@@ -125,7 +140,7 @@ static void dump_pmem(uint32_t x, const uint8_t* s, size_t n)
 static int do_write
 (
  serial_handle_t* handle,
- unsigned int bootid,
+ unsigned int sid,
  int ac, char** av
 )
 {
@@ -290,22 +305,23 @@ static int do_write
       buf[0] = CMD_ID_WRITE_PMEM;
       write_uint32(buf + 1, (pos->addr + off) / 2);
       write_uint16(buf + 5, page_size / 4);
-      if (com_write(handle, buf)) goto on_error;
+      if (com_write(handle, sid, buf)) goto on_error;
 
       /* command ack */
-      if (com_read_ack(handle)) goto on_error;
+      if (com_read_ack(handle, sid)) goto on_error;
 
       /* send the page 8 bytes (2 program words) at a time */
       for (i = 0; i < page_size; i += 8)
       {
-	if (com_write(handle, pos->buf + pos->off + off + i)) goto on_error;
+	if (com_write(handle, sid, pos->buf + pos->off + off + i))
+	  goto on_error;
 
 	/* frame ack */
-	if (com_read_ack(handle)) goto on_error;
+	if (com_read_ack(handle, sid)) goto on_error;
       }
 
       /* page programming ack */
-      if (com_read_ack(handle)) goto on_error;
+      if (com_read_ack(handle, sid)) goto on_error;
 
       /* next page or done */
       off += page_size;
@@ -332,12 +348,12 @@ static int do_write
     buf[0] = CMD_ID_READ_PMEM;
     write_uint32(buf + 1, DCR_BYTE_ADDR / 2);
     write_uint16(buf + 5, DCR_BYTE_COUNT / 4);
-    if (com_write(handle, buf)) goto on_error;
-    if (com_read_ack(handle)) goto on_error;
+    if (com_write(handle, sid, buf)) goto on_error;
+    if (com_read_ack(handle, sid)) goto on_error;
     for (i = 0; i < DCR_BYTE_COUNT; i += 8)
     {
-      if (com_read(handle, dcr_buf + i)) goto on_error;
-      if (com_write_ack(handle)) goto on_error;
+      if (com_read(handle, sid, dcr_buf + i)) goto on_error;
+      if (com_write_ack(handle, sid)) goto on_error;
     }
 
     printf("[x] read DCR area\n");
@@ -357,14 +373,14 @@ static int do_write
 
     /* write dcr_buf */
     buf[0] = CMD_ID_WRITE_CMEM;
-    if (com_write(handle, buf)) goto on_error;
-    if (com_read_ack(handle)) goto on_error;
+    if (com_write(handle, sid, buf)) goto on_error;
+    if (com_read_ack(handle, sid)) goto on_error;
     for (i = 0; i < DCR_BYTE_COUNT; i += 8)
     {
-      if (com_write(handle, dcr_buf + i)) goto on_error;
-      if (com_read_ack(handle)) goto on_error;
+      if (com_write(handle, sid, dcr_buf + i)) goto on_error;
+      if (com_read_ack(handle, sid)) goto on_error;
     }
-    if (com_read_ack(handle)) goto on_error;
+    if (com_read_ack(handle, sid)) goto on_error;
 
     printf("[x] write DCR area\n");
   }
@@ -382,7 +398,7 @@ static int do_write
 static int do_read
 (
  serial_handle_t* handle,
- unsigned int bootid,
+ unsigned int sid,
  int ac, char** av
 )
 {
@@ -406,17 +422,17 @@ static int do_read
   cmd_buf[0] = CMD_ID_READ_PMEM;
   write_uint32(cmd_buf + 1, addr);
   write_uint16(cmd_buf + 5, size);
-  if (com_write(handle, cmd_buf)) goto on_error;
+  if (com_write(handle, sid, cmd_buf)) goto on_error;
 
   /* command ack */
-  if (com_read_ack(handle)) goto on_error;
+  if (com_read_ack(handle, sid)) goto on_error;
 
   for (i = 0; i < (size * 4); i += 8)
   {
-    if (com_read(handle, read_buf + i)) goto on_error;
+    if (com_read(handle, sid, read_buf + i)) goto on_error;
 
     /* frame ack */
-    if (com_write_ack(handle)) goto on_error;
+    if (com_write_ack(handle, sid)) goto on_error;
   }
 
   /* print the buffer */
@@ -439,7 +455,7 @@ static int do_read
 static int do_goto
 (
  serial_handle_t* handle,
- unsigned int bootid,
+ unsigned int sid,
  int ac, char** av
 )
 {
@@ -448,8 +464,8 @@ static int do_goto
 
   cmd_buf[0] = CMD_ID_GOTO;
   write_uint32(cmd_buf + 1, addr);
-  if (com_write(handle, cmd_buf)) return -1;
-  if (com_read_ack(handle)) return -1;
+  if (com_write(handle, sid, cmd_buf)) return -1;
+  if (com_read_ack(handle, sid)) return -1;
   return 0;
 }
 
@@ -459,36 +475,40 @@ static int do_goto
 static int do_status
 (
  serial_handle_t* handle,
- unsigned int bootid
+ unsigned int sid
 )
 {
   /* bootid the device id or (unsigned int)-1 for all */
 
-  uint8_t bootids[16];
+  uint16_t sids[8];
   uint8_t buf[CMD_BUF_SIZE];
   unsigned int i;
   unsigned int n;
   int err = -1;
   int ret;
 
-  if (bootid == (unsigned int)-1)
+  if (sid == (unsigned int)-1)
   {
-    n = sizeof(bootids) / sizeof(bootids[0]);
-    for (i = 0; i < n; ++i) bootids[i] = (uint8_t)i;
+    n = sizeof(sids) / sizeof(sids[0]);
+    for (i = 0; i < n; ++i)
+      sids[i] = MAKE_CAN_SID(HIGH_PRIO_ID, BOOT_GROUP_ID, i);
   }
   else
   {
     n = 1;
-    bootids[0] = (uint8_t)bootid;
+    sids[0] = (uint8_t)sid;
   }
 
   for (i = 0; i < n; ++i)
   {
+    const uint8_t nodeid = GET_CAN_NODE_ID(sids[i]);
+
     buf[0] = CMD_ID_STATUS;
-    if (com_write(handle, buf)) goto on_error;
-    ret = com_read_timeout(handle, buf, 1000);
+    if (com_write(handle, sids[i], buf)) goto on_error;
+    ret = com_read_timeout(handle, sids[i], buf, 1000);
     if (ret == -1) goto on_error;
-    printf("device %02x: [%c]\n", bootids[i], ret == -2 ? '!' : 'x');
+
+    printf("device %02x: [%c]\n", nodeid, ret == -2 ? '!' : 'x');
   }
 
   /* success */
@@ -504,16 +524,19 @@ static int do_status
 int main(int ac, char** av)
 {
   /* command lines:
-     ./a.out write <serial_device> <bootid> <file.hex> <noconf>
-     ./a.out read <serial_device> <bootid> <addr> <size>
-     ./a.out goto <serial_device> <bootid> <addr>
-     ./a.out status <serial_device> <bootid>
+     ./a.out write <serial_device> <devid> <file.hex> <noconf>
+     ./a.out read <serial_device> <devid> <addr> <size>
+     ./a.out goto <serial_device> <devid> <addr>
+     ./a.out status <serial_device> <devid>
    */
 
   const char* const what = av[1];
   const char* const devname = av[2];
-  const unsigned int bootid = (ac == 3) ? (unsigned int)-1 : atoi(av[3]);
+  const unsigned int devid = (ac == 3) ? (unsigned int)-1 : atoi(av[3]);
+  unsigned int sid;
   serial_handle_t handle = { -1, };
+
+  sid = MAKE_CAN_SID(HIGH_PRIO_ID, BOOT_GROUP_ID, devid);
 
   if (strcmp(devname, "null"))
   {
@@ -527,7 +550,7 @@ int main(int ac, char** av)
   /* program device flash */
   if (strcmp(what, "write") == 0)
   {
-    if (do_write(&handle, bootid, ac - 4, av + 4) == -1)
+    if (do_write(&handle, sid, ac - 4, av + 4) == -1)
     {
       printf("do_program() == -1\n");
       goto on_error;
@@ -535,7 +558,7 @@ int main(int ac, char** av)
   }
   else if (strcmp(what, "read") == 0)
   {
-    if (do_read(&handle, bootid, ac - 4, av + 4) == -1)
+    if (do_read(&handle, sid, ac - 4, av + 4) == -1)
     {
       printf("do_read() == -1\n");
       goto on_error;
@@ -543,7 +566,7 @@ int main(int ac, char** av)
   }
   else if (strcmp(what, "goto") == 0)
   {
-    if (do_goto(&handle, bootid, ac - 4, av + 4) == -1)
+    if (do_goto(&handle, sid, ac - 4, av + 4) == -1)
     {
       printf("do_goto() == -1\n");
       goto on_error;
@@ -551,7 +574,7 @@ int main(int ac, char** av)
   }
   else if (strcmp(what, "status") == 0)
   {
-    if (do_status(&handle, bootid) == -1)
+    if (do_status(&handle, sid) == -1)
     {
       printf("do_status() == -1\n");
       goto on_error;

@@ -346,6 +346,30 @@ int serial_readn(serial_handle_t* h, void* buf, size_t size)
 }
 
 
+int serial_writen(serial_handle_t* h, const void* buf, size_t size)
+{
+  ssize_t n;
+
+  while (size)
+    {
+      n = write(h->fd, buf, size);
+
+      if (n < 0)
+	{
+	  perror("write()\n");
+	  return -1;
+	}
+      else if (n)
+	{
+	  size -= n;
+	  buf = (unsigned char*)buf + n;
+	}
+    }
+
+  return 0;
+}
+
+
 int serial_write(serial_handle_t* h,
 		 const void* buf,
 		 size_t size,

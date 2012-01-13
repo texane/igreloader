@@ -34,6 +34,7 @@
 
 /* CAN addressing macros */
 #define MAKE_CAN_SID(__p, __g, __n) (((__p) << 9) | ((__g) << 3) | __n)
+#define GET_CAN_NODE_ID(__x) (__x) & ((1 << 3) - 1)
 
 
 #endif /* ! COMMON_H_INCLUDED */

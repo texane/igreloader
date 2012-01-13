@@ -128,7 +128,7 @@ static void ecan_setup(void)
   /* clear window bit to access ECAN control registers */
   C1CTRL1bits.WIN = 0;
 
-#if 0
+#if 1
   /* put the module in normal mode */
   C1CTRL1bits.REQOP = 0;
   while (C1CTRL1bits.OPMODE != 0) ;
@@ -260,7 +260,7 @@ static void uart_write(uint16_t id, uint8_t* s)
 {
   unsigned int i;
 
-#if 0 /* fixme, bug */
+#if 1 /* fixme, bug */
   /* write id, little first */
   uart_write_uint8((uint8_t)(id & 0xff));
   uart_write_uint8((uint8_t)(id >> 8));
