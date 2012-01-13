@@ -18,7 +18,7 @@ typedef unsigned long uint32_t;
 
 /* polling or interrupt */
 
-#define CONFIG_USE_INTERRUPT 0
+#define CONFIG_USE_INTERRUPT 1
 
 
 /* notes
@@ -55,38 +55,6 @@ static void osc_setup(void)
 /* ecan */
 
 uint16_t ecan_bufs[4][8] __attribute__((space(dma), aligned(4 * 16)));
-
-#if CONFIG_USE_INTERRUPT
-
-static inline unsigned int ecan_is_rx(void);
-static void ecan_read(unsigned int, uint16_t*, uint8_t*);
-static void uart_write(uint16_t, uint8_t*);
-
-void __attribute__((interrupt, no_auto_psv)) _C1Interrupt(void)
-{
-  if (C1INTFbits.TBIF)
-  {
-    C1INTFbits.TBIF = 0;	    
-  }
-
-  if (C1INTFbits.RBIF)
-  {
-    const unsigned int buf_index = ecan_is_rx();
-    if (buf_index)
-    {
-      static uint8_t buf[CAN_DATA_SIZE];
-      uint16_t id;
-      ecan_read(buf_index, &id, buf);
-      uart_write(id, buf);
-    }
-
-    C1INTFbits.RBIF = 0;
-  }
-
-  IFS2bits.C1IF = 0;
-}
-
-#endif /* CONFIG_USE_INTERRUPT */
 
 static void ecan_setup(void)
 {
@@ -245,27 +213,6 @@ static void ecan_read(unsigned int buf_index, uint16_t* id, uint8_t* s)
 
 /* uart */
 
-#if CONFIG_USE_INTERRUPT
-
-static void uart_read(uint16_t*, uint8_t*);
-static inline unsigned int uart_is_rx(void);
-
-void __attribute__((__interrupt__, no_auto_psv)) _U1RXInterrupt(void)
-{
-  static uint8_t buf[CAN_DATA_SIZE];
-  uint16_t id;
-
-  if (uart_is_rx())
-  {
-    uart_read(&id, buf);
-    ecan_write(id, buf);
-  }
-
-  IFS0bits.U1RXIF = 0;
-}
-
-#endif
-
 static void uart_setup(void)
 {
 #define CONFIG_UART_BAUDRATE 38400
@@ -392,9 +339,68 @@ int main(void)
       ecan_read(buf_index, &id, buf);
       uart_write(id, buf);
     }
-
 #endif
   }
 
   return 0;
 }
+
+
+#if CONFIG_USE_INTERRUPT
+
+/* interrupt handlers */
+
+static unsigned int uart_index = 0;
+static uint8_t uart_buffer[2 + CAN_DATA_SIZE];
+
+static inline unsigned int uart_is_rx(void);
+
+void __attribute__((interrupt, no_auto_psv)) _U1RXInterrupt(void)
+{
+  IFS0bits.U1RXIF = 0;
+
+  while (uart_is_rx())
+  {
+    uart_buffer[uart_index++] = U1RXREG;
+
+    if (uart_index == sizeof(uart_buffer))
+    {
+      const uint16_t id = *(uint16_t*)uart_buffer;
+      uart_write(0, (uint8_t*)uart_buffer + 2);
+      ecan_write(id, (uint8_t*)uart_buffer + 2);
+      uart_index = 0;
+    }
+  }
+}
+
+void __attribute__((interrupt, no_auto_psv)) _U1TXInterrupt(void)
+{
+  IFS0bits.U1TXIF = 0;
+}
+
+void __attribute__((interrupt, no_auto_psv)) _C1Interrupt(void)
+{
+  IFS2bits.C1IF = 0;
+
+  if (C1INTFbits.TBIF)
+  {
+    C1INTFbits.TBIF = 0;
+  }
+
+  if (C1INTFbits.RBIF)
+  {
+    uint8_t buf[CAN_DATA_SIZE];
+    unsigned int buf_index;
+    uint16_t id;
+
+    C1INTFbits.RBIF = 0;
+
+    while ((buf_index = ecan_is_rx()) != 0)
+    {
+      ecan_read(buf_index, &id, buf);
+      uart_write(id, buf);
+    }
+  }
+}
+
+#endif /* CONFIG_USE_INTERRUPT */

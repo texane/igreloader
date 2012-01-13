@@ -84,6 +84,7 @@
       <C30Global>
       </C30Global>
       <PICkit2PlatformTool>
+        <property key="pk2settings.setvddvoltage" value="3.25"/>
       </PICkit2PlatformTool>
     </conf>
   </confs>
