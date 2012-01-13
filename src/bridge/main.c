@@ -366,7 +366,10 @@ void __attribute__((interrupt, no_auto_psv)) _U1RXInterrupt(void)
     if (uart_index == sizeof(uart_buffer))
     {
       const uint16_t id = *(uint16_t*)uart_buffer;
-      uart_write(0, (uint8_t*)uart_buffer + 2);
+
+      /* debugging */
+      uart_write(id, (uint8_t*)uart_buffer + 2);
+
       ecan_write(id, (uint8_t*)uart_buffer + 2);
       uart_index = 0;
     }
