@@ -10,7 +10,8 @@
 #include "dev.h"
 #include "hex.h"
 #include "lendian.h"
-#include "scab.h"
+#include "scab_api.h"
+#include "scab_common.h"
 #include "../common/common.h"
 
 
@@ -19,15 +20,16 @@
 #define HOST_FILTER_MASK 0x1ff /* exclude priority */
 #define HOST_FILTER_VALUE MAKE_CAN_SID(0, BOOT_GROUP_ID, HOST_NODE_ID)
 
-static int com_init(scab_handle_t* handle, const char* devname)
+static int com_init(scab_handle_t** handle, const char* devname)
 {
   if (scab_open(handle, devname)) return -1;
 
-  scab_sync_serial(handle);
+  scab_sync_serial(*handle);
 
-  if (scab_set_can_filter(handle, HOST_FILTER_MASK, HOST_FILTER_VALUE))
+  if (scab_set_can_filter(*handle, HOST_FILTER_MASK, HOST_FILTER_VALUE))
   {
-    scab_close(handle);
+    scab_close(*handle);
+    *handle = NULL;
     return -1;
   }
 
@@ -62,7 +64,7 @@ static int com_read_timeout
     tm.tv_usec = 1000 * (ms % 1000);
 
     FD_ZERO(&fds);
-    FD_SET(handle->fd, &fds);
+    FD_SET(scab_get_handle_fd(handle), &fds);
   
     err = select(scab_get_handle_fd(handle) + 1, &fds, NULL, NULL, &tm);
     /* timeout or error */
@@ -503,7 +505,7 @@ int main(int ac, char** av)
   const char* const devname = av[2];
   const unsigned int devid = (ac == 3) ? (unsigned int)-1 : atoi(av[3]);
   unsigned int sid;
-  scab_handle_t handle = SCAB_STATIC_INITIALIZER;
+  scab_handle_t* handle = NULL;
 
   sid = MAKE_CAN_SID(HIGH_PRIO_ID, BOOT_GROUP_ID, devid);
 
@@ -519,7 +521,7 @@ int main(int ac, char** av)
   /* program device flash */
   if (strcmp(what, "write") == 0)
   {
-    if (do_write(&handle, sid, ac - 4, av + 4) == -1)
+    if (do_write(handle, sid, ac - 4, av + 4) == -1)
     {
       printf("do_program() == -1\n");
       goto on_error;
@@ -527,7 +529,7 @@ int main(int ac, char** av)
   }
   else if (strcmp(what, "read") == 0)
   {
-    if (do_read(&handle, sid, ac - 4, av + 4) == -1)
+    if (do_read(handle, sid, ac - 4, av + 4) == -1)
     {
       printf("do_read() == -1\n");
       goto on_error;
@@ -535,7 +537,7 @@ int main(int ac, char** av)
   }
   else if (strcmp(what, "goto") == 0)
   {
-    if (do_goto(&handle, sid, ac - 4, av + 4) == -1)
+    if (do_goto(handle, sid, ac - 4, av + 4) == -1)
     {
       printf("do_goto() == -1\n");
       goto on_error;
@@ -543,7 +545,7 @@ int main(int ac, char** av)
   }
   else if (strcmp(what, "status") == 0)
   {
-    if (do_status(&handle, sid) == -1)
+    if (do_status(handle, sid) == -1)
     {
       printf("do_status() == -1\n");
       goto on_error;
@@ -556,7 +558,7 @@ int main(int ac, char** av)
   }
 
  on_error:
-  if (handle.fd != -1) com_close(&handle);
+  if (handle != NULL) com_close(handle);
 
   return 0;
 }
