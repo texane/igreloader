@@ -4,4 +4,5 @@ gcc -Wall \
 -I../src/host \
 ../src/host/main.c \
 ../src/host/hex.c \
+../src/host/scab.c \
 ../src/host/serial.c

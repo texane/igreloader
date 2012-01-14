@@ -10,73 +10,48 @@
 #include "dev.h"
 #include "hex.h"
 #include "lendian.h"
-#include "serial.h"
+#include "scab.h"
 #include "../common/common.h"
-
-
-/* set to 0 if endpoint is not a serial to CAN bridge */
-#define CONFIG_USE_CAN_BRIDGE 1
 
 
 /* communication routines */
 
-static int com_init(serial_handle_t* handle, const char* devname)
+#define HOST_FILTER_MASK 0x1ff /* exclude priority */
+#define HOST_FILTER_VALUE MAKE_CAN_SID(0, BOOT_GROUP_ID, HOST_NODE_ID)
+
+
+static int com_init(scab_handle_t* handle, const char* devname)
 {
-  static const serial_conf_t conf = { 38400, 8, SERIAL_PARITY_DISABLED, 1 };
+  if (scab_open(handle, devname)) return -1;
 
-  if (serial_open(handle, devname) == -1)
-  {
-    printf("serial_open(%s) == -1\n", devname);
-    return -1;
-  }
+  scab_sync_serial(handle);
 
-  if (serial_set_conf(handle, &conf) == -1)
+  if (scab_add_can_filter(handle, HOST_FILTER_MASK, HOST_FILTER_VALUE))
   {
-    printf("serial_set_conf() == -1\n");
-    serial_close(handle);
+    scab_close(handle);
     return -1;
   }
 
   return 0;
 }
 
-static inline void com_close(serial_handle_t* handle)
+static inline int com_close(scab_handle_t* handle)
 {
-  serial_close(handle);
+  scab_clear_can_filter(handle);
+  return scab_close(handle);
 }
 
-static int com_write(serial_handle_t* handle, uint16_t sid, const uint8_t* buf)
+static inline int com_write
+(scab_handle_t* handle, uint16_t sid, const uint8_t* buf)
 {
-  size_t size = CMD_BUF_SIZE;
-  size_t tmp;
-
-#if CONFIG_USE_CAN_BRIDGE
-  if (serial_writen(handle, (const void*)&sid, sizeof(uint16_t))) return -1;
-#endif /* CONFIG_USE_CAN_BRIDGE */
-
-  for (tmp = 0; size; size -= tmp)
-  {
-    if (serial_write(handle, buf, size, &tmp))
-      break ;
-  }
-
-  return (size == 0) ? 0 : -1;
-}
-
-static inline int com_read_sid(serial_handle_t* handle, uint16_t* sid)
-{
-  return serial_readn(handle, (void*)sid, sizeof(uint16_t));
+  return scab_write_frame(handle, sid, buf);
 }
 
 static int com_read_timeout
-(serial_handle_t* handle, uint8_t* buf, unsigned int ms)
+(scab_handle_t* handle, uint8_t* buf, unsigned int ms)
 {
   /* ms the timeout in milliseconds, or 0 */
   /* return -2 on timeout */
-
-#if CONFIG_USE_CAN_BRIDGE
-  uint16_t sid;
-#endif /* CONFIG_USE_CAN_BRIDGE */
 
   while (1)
   {
@@ -92,30 +67,19 @@ static int com_read_timeout
       FD_ZERO(&fds);
       FD_SET(handle->fd, &fds);
   
-      err = select(handle->fd + 1, &fds, NULL, NULL, &tm);
+      err = select(scab_get_handle_fd(handle) + 1, &fds, NULL, NULL, &tm);
       /* timeout or error */
       if (err != 1)  return err == 0 ? -2 : -1;
     }
 
-    /* read a full frame */
-
-#if CONFIG_USE_CAN_BRIDGE
-    if (com_read_sid(handle, &sid)) return -1;
-#endif
-
-    if (serial_readn(handle, buf, CMD_BUF_SIZE)) return -1;
-
-#if CONFIG_USE_CAN_BRIDGE
-    /* skip the message */
-    if (MASK_CAN_PRIO_ID(sid) == HOST_NODE_ID) break ;
-#endif
+    scab_read_frame(handle, NULL, buf);
 
   } /* while (1) */
 
   return 0;
 }
 
-static inline int com_read(serial_handle_t* handle, uint8_t* buf)
+static inline int com_read(scab_handle_t* handle, uint8_t* buf)
 {
   return com_read_timeout(handle, buf, 0);
 }
@@ -125,12 +89,12 @@ static inline int com_read(serial_handle_t* handle, uint8_t* buf)
 
 static uint8_t dummy_buf[CMD_BUF_SIZE];
 
-static inline int com_read_ack(serial_handle_t* handle)
+static inline int com_read_ack(scab_handle_t* handle)
 {
   return com_read(handle, dummy_buf);
 }
 
-static inline int com_write_ack(serial_handle_t* handle, uint16_t sid)
+static inline int com_write_ack(scab_handle_t* handle, uint16_t sid)
 {
   return com_write(handle, sid, dummy_buf);
 }
@@ -150,7 +114,7 @@ static void dump_pmem(uint32_t x, const uint8_t* s, size_t n)
 
 static int do_write
 (
- serial_handle_t* handle,
+ scab_handle_t* handle,
  unsigned int sid,
  int ac, char** av
 )
@@ -409,7 +373,7 @@ static int do_write
 
 static int do_read
 (
- serial_handle_t* handle,
+ scab_handle_t* handle,
  unsigned int sid,
  int ac, char** av
 )
@@ -466,7 +430,7 @@ static int do_read
 
 static int do_goto
 (
- serial_handle_t* handle,
+ scab_handle_t* handle,
  unsigned int sid,
  int ac, char** av
 )
@@ -486,7 +450,7 @@ static int do_goto
 
 static int do_status
 (
- serial_handle_t* handle,
+ scab_handle_t* handle,
  unsigned int sid
 )
 {
@@ -546,7 +510,7 @@ int main(int ac, char** av)
   const char* const devname = av[2];
   const unsigned int devid = (ac == 3) ? (unsigned int)-1 : atoi(av[3]);
   unsigned int sid;
-  serial_handle_t handle = { -1, };
+  scab_handle_t handle = SCAB_STATIC_INITIALIZER;
 
   sid = MAKE_CAN_SID(HIGH_PRIO_ID, BOOT_GROUP_ID, devid);
 

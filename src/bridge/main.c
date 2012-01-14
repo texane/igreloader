@@ -1,5 +1,9 @@
 #include <p33Fxxxx.h>
 
+#define __MPLAB_BUILD
+#include "../host/scab.h"
+#undef __MPLAB_BUILD
+
 
 /* configuration bits */
 
@@ -19,14 +23,6 @@ typedef unsigned long uint32_t;
 /* polling or interrupt */
 
 #define CONFIG_USE_INTERRUPT 1
-
-
-/* notes
-   UART wraps CAN frames using the following format:
-   <CAN_ID:2>,<CAN_PAYLOAD:8>
- */
-
-#define CAN_DATA_SIZE 8
 
 
 /* oscillator */
@@ -108,26 +104,6 @@ static void ecan_setup(void)
   /* 4 messages buffered in DMA RAM */
   C1FCTRLbits.DMABS = 0;
 
-  /* dummy filter */
-  C1CTRL1bits.WIN = 1;
-  /* select acceptance mask 0 filter 0 buffer 1 */
-  C1FMSKSEL1bits.F0MSK = 0;
-
-  /* accept all standard sids */
-  C1RXM0SID = 0;
-  C1RXF0SID = 0;
-  C1RXM0SID = 0x0008; /* mide bit */
-  C1RXF0SID = 0;
-
-  /* use buffer 1 for incoming messages */
-  C1BUFPNT1bits.F0BP = 1;
-
-  /* enable filter 0 */
-  C1FEN1bits.FLTEN0 = 1;
-
-  /* clear window bit to access ECAN control registers */
-  C1CTRL1bits.WIN = 0;
-
 #if 1
   /* put the module in normal mode */
   C1CTRL1bits.REQOP = 0;
@@ -161,6 +137,56 @@ static void ecan_setup(void)
 #endif
 }
 
+static void ecan_set_sid_filter(uint16_t mask, uint16_t sid)
+{
+  /* configuration mode */
+  C1CTRL1bits.REQOP = 4;
+  while (C1CTRL1bits.OPMODE != 4);
+
+  /* set window bit to access ECAN control registers */
+  C1CTRL1bits.WIN = 1;
+
+  /* select acceptance mask 0 filter 0 buffer 1 */
+  C1FMSKSEL1bits.F0MSK = 0;
+
+  /* accept only standard sids */
+  C1RXM0SID = (mask << 5) | 0x0008; /* mide bit */
+  C1RXF0SID = sid << 5;
+
+  /* use buffer 1 for incoming messages */
+  C1BUFPNT1bits.F0BP = 1;
+
+  /* enable filter 0 */
+  C1FEN1bits.FLTEN0 = 1;
+
+  /* clear window bit to access ECAN control registers */
+  C1CTRL1bits.WIN = 0;
+
+  /* put the module in normal mode */
+  C1CTRL1bits.REQOP = 0;
+  while (C1CTRL1bits.OPMODE != 0) ;
+}
+
+static void ecan_clear_sid_filter(void)
+{
+  /* configuration mode */
+  C1CTRL1bits.REQOP = 4;
+  while (C1CTRL1bits.OPMODE != 4);
+
+  /* set window bit to access ECAN control registers */
+  C1CTRL1bits.WIN = 1;
+
+  /* disable filter 0 */
+  C1FEN1bits.FLTEN0 = 0;
+
+  /* clear window bit to access ECAN control registers */
+  C1CTRL1bits.WIN = 0;
+
+  /* put the module in normal mode */
+  C1CTRL1bits.REQOP = 0;
+  while (C1CTRL1bits.OPMODE != 0) ;
+}
+
 static inline unsigned int ecan_is_rx(void)
 {
   /* return 0 if no rx buffer full */
@@ -180,6 +206,7 @@ static void ecan_write(uint16_t id, uint8_t* s)
 
   ecan_tx_buf[0] = id << 2;
   ecan_tx_buf[1] = 0;
+#define CAN_DATA_SIZE 8
   ecan_tx_buf[2] = CAN_DATA_SIZE;
 
   ecan_tx_buf[3] = ((uint16_t)s[1] << 8) | s[0];
@@ -256,20 +283,10 @@ static inline void uart_write_uint8(uint8_t x)
   U1TXREG = x;
 }
 
-static void uart_write(uint16_t id, uint8_t* s)
+static void uart_write(uint8_t* s)
 {
   unsigned int i;
-
-#if 1 /* fixme, bug */
-  /* write id, little first */
-  uart_write_uint8((uint8_t)(id & 0xff));
-  uart_write_uint8((uint8_t)(id >> 8));
-#else
-  uart_write_uint8(0x2a);
-  uart_write_uint8(0x2a);
-#endif /* fixme */
-
-  for (i = 0; i < CAN_DATA_SIZE; ++i, ++s)
+  for (i = 0; i < SCAB_CMD_SIZE; ++i, ++s)
     uart_write_uint8(*s);
 }
 
@@ -284,16 +301,102 @@ static inline uint8_t uart_read_uint8(void)
   return U1RXREG;
 }
 
-static void uart_read(uint16_t* id, uint8_t* s)
+static void uart_read(uint8_t* s)
 {
-  uint16_t i;
-
-  /* id sent little endian */
-  i = (uint16_t)uart_read_uint8();
-  *id = ((uint16_t)uart_read_uint8() << 8) | i;
-
-  for (i = 0; i < CAN_DATA_SIZE; ++i, ++s)
+  unsigned int i;
+  for (i = 0; i < SCAB_CMD_SIZE; ++i, ++s)
     *s = uart_read_uint8();
+}
+
+
+/* scab command handlers */
+
+static inline uint16_t read_uint16(uint8_t* buf)
+{
+  return (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+}
+
+static inline void write_uint16(uint8_t* buf, uint16_t x)
+{
+  buf[0] = (uint8_t)x;
+  buf[1] = (uint8_t)(x >> 8);
+}
+
+static uint16_t handle_frame(uint8_t* buf)
+{
+  /* forward to ECAN */
+  const uint16_t sid = read_uint16(buf + 1);
+  ecan_write(sid, buf + 3);
+
+  /* no status */
+  return SCAB_STATUS_INVALID;
+}
+
+static uint16_t handle_sync(uint8_t* buf)
+{
+  /* todo */
+  return SCAB_STATUS_SUCCESS;
+}
+
+static uint16_t handle_enable(uint8_t* buf)
+{
+  /* todo */
+  return SCAB_STATUS_SUCCESS;
+}
+
+static uint16_t handle_set_can_times(uint8_t* buf)
+{
+  /* todo */
+  return SCAB_STATUS_SUCCESS;
+}
+
+static uint16_t handle_set_can_filter(uint8_t* buf)
+{
+  const uint16_t mask = read_uint16(buf + 1);
+  const uint16_t sid = read_uint16(buf + 3);
+  ecan_set_sid_filter(mask, sid);
+  return SCAB_STATUS_SUCCESS;
+}
+
+static uint16_t handle_clear_can_filter(uint8_t* buf)
+{
+  ecan_clear_sid_filter();
+  return SCAB_STATUS_SUCCESS;
+}
+
+static uint16_t handle_cmd_status(uint8_t* buf)
+{
+  /* should not be received */
+  return SCAB_STATUS_INVALID;
+}
+
+static void handle_scab_cmd(uint8_t* buf)
+{
+  static uint16_t (*handlers[])(uint8_t*) =
+  {
+    /* warning: must follow SCAB_CMD_XXX order */
+    handle_frame,
+    handle_sync,
+    handle_enable,
+    handle_set_can_times,
+    handle_set_can_filter,
+    handle_clear_can_filter,
+    handle_cmd_status
+  };
+
+  uint16_t status;
+
+  if (buf[0] < SCAB_CMD_INVALID)
+  {
+    status = handlers[buf[0]](buf);
+
+    if (status != SCAB_STATUS_INVALID)
+    {
+      buf[0] = SCAB_CMD_STATUS;
+      buf[1] = (uint8_t)status;
+      uart_write(buf);
+    }
+  }
 }
 
 
@@ -317,8 +420,8 @@ static inline void idle(void)
 int main(void)
 {
 #if (CONFIG_USE_INTERRUPT == 0)
-  uint8_t buf[CAN_DATA_SIZE];
-  uint16_t id;
+  uint8_t buf[SCAB_CMD_SIZE];
+  uint16_t sid;
   unsigned int buf_index;
 #endif
 
@@ -335,15 +438,18 @@ int main(void)
 #else /* polling */
     if (uart_is_rx())
     {
-      uart_read(&id, buf);
-      ecan_write(id, buf);
+      uart_read(buf);
+      handle_scab_cmd(buffer);
     }
 
     buf_index = ecan_is_rx();
     if (buf_index)
     {
-      ecan_read(buf_index, &id, buf);
-      uart_write(id, buf);
+      /* read payload and send scab frame */
+      ecan_read(buf_index, &sid, buf + 3);
+      buf[0] = SCAB_CMD_FRAME;
+      write_uint16(buf + 1, sid);
+      uart_write(buf);
     }
 #endif
   }
@@ -357,9 +463,7 @@ int main(void)
 /* interrupt handlers */
 
 static unsigned int uart_index = 0;
-static uint8_t uart_buffer[2 + CAN_DATA_SIZE];
-
-static inline unsigned int uart_is_rx(void);
+static uint8_t uart_buffer[SCAB_CMD_SIZE];
 
 void __attribute__((__interrupt__, no_auto_psv)) _U1RXInterrupt(void)
 {
@@ -368,16 +472,7 @@ void __attribute__((__interrupt__, no_auto_psv)) _U1RXInterrupt(void)
     uart_buffer[uart_index++] = U1RXREG;
 
     if (uart_index == sizeof(uart_buffer))
-    {
-      const uint16_t id = *(uint16_t*)uart_buffer;
-      ecan_write(id, uart_buffer + 2);
-      uart_index = 0;
-
-#if 0
-      /* debugging */
-      uart_write(id, uart_buffer + 2);
-#endif
-    }
+      handle_scab_cmd(uart_buffer);
   }
 
   IFS0bits.U1RXIF = 0;
@@ -397,14 +492,17 @@ void __attribute__((__interrupt__, no_auto_psv)) _C1Interrupt(void)
 
   if (C1INTFbits.RBIF)
   {
-    uint8_t buf[CAN_DATA_SIZE];
+    uint8_t buf[SCAB_CMD_SIZE];
     unsigned int buf_index;
-    uint16_t id;
+    uint16_t sid;
 
     while ((buf_index = ecan_is_rx()) != 0)
     {
-      ecan_read(buf_index, &id, buf);
-      uart_write(id, buf);
+      ecan_read(buf_index, &sid, buf + 3);
+
+      buf[0] = SCAB_CMD_FRAME;
+      write_uint16(buf + 1, sid);
+      uart_write(buf);
     }
 
     C1INTFbits.RBIF = 0;
