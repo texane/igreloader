@@ -144,7 +144,7 @@ static void ecan_set_sid_filter(uint16_t mask, uint16_t sid)
   C1FMSKSEL1bits.F0MSK = 0;
 
   /* accept only standard sids */
-  C1RXM0SID = (mask << 5) | 0x0008; /* mide bit */
+  C1RXM0SID = (mask << 5) | (1 << 3); /* mide bit */
   C1RXF0SID = sid << 5;
 
   /* use buffer 1 for incoming messages */

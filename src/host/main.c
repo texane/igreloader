@@ -19,7 +19,6 @@
 #define HOST_FILTER_MASK 0x1ff /* exclude priority */
 #define HOST_FILTER_VALUE MAKE_CAN_SID(0, BOOT_GROUP_ID, HOST_NODE_ID)
 
-
 static int com_init(scab_handle_t* handle, const char* devname)
 {
   if (scab_open(handle, devname)) return -1;
@@ -53,30 +52,24 @@ static int com_read_timeout
   /* ms the timeout in milliseconds, or 0 */
   /* return -2 on timeout */
 
-  while (1)
+  if (ms != 0)
   {
-    if (ms != 0)
-    {
-      int err;
-      struct timeval tm;
-      fd_set fds;
+    int err;
+    struct timeval tm;
+    fd_set fds;
 
-      tm.tv_sec = ms / 1000;
-      tm.tv_usec = 1000 * (ms % 1000);
+    tm.tv_sec = ms / 1000;
+    tm.tv_usec = 1000 * (ms % 1000);
 
-      FD_ZERO(&fds);
-      FD_SET(handle->fd, &fds);
+    FD_ZERO(&fds);
+    FD_SET(handle->fd, &fds);
   
-      err = select(scab_get_handle_fd(handle) + 1, &fds, NULL, NULL, &tm);
-      /* timeout or error */
-      if (err != 1)  return err == 0 ? -2 : -1;
-    }
+    err = select(scab_get_handle_fd(handle) + 1, &fds, NULL, NULL, &tm);
+    /* timeout or error */
+    if (err != 1)  return err == 0 ? -2 : -1;
+  }
 
-    scab_read_frame(handle, NULL, buf);
-
-  } /* while (1) */
-
-  return 0;
+  return scab_read_frame(handle, NULL, buf);
 }
 
 static inline int com_read(scab_handle_t* handle, uint8_t* buf)
