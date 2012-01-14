@@ -26,7 +26,7 @@ static int com_init(scab_handle_t* handle, const char* devname)
 
   scab_sync_serial(handle);
 
-  if (scab_add_can_filter(handle, HOST_FILTER_MASK, HOST_FILTER_VALUE))
+  if (scab_set_can_filter(handle, HOST_FILTER_MASK, HOST_FILTER_VALUE))
   {
     scab_close(handle);
     return -1;

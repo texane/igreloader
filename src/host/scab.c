@@ -51,7 +51,6 @@ static int write_cmd_read_status(scab_handle_t* h, const uint8_t* buf)
 
   if (serial_writen(h, buf, SCAB_CMD_SIZE)) return -1;
   if (read_status(h, &status)) return -1;
-
   return status == SCAB_STATUS_SUCCESS ? 0 : -1;
 }
 
@@ -172,7 +171,7 @@ int scab_disable_bridge(scab_handle_t* h)
 /* CAN filter commands
  */
 
-int scab_add_can_filter(scab_handle_t* h, uint16_t m, uint16_t v)
+int scab_set_can_filter(scab_handle_t* h, uint16_t m, uint16_t v)
 {
   /* m the filter mask */
   /* v the filter value */

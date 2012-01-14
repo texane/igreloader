@@ -104,15 +104,9 @@ static void ecan_setup(void)
   /* 4 messages buffered in DMA RAM */
   C1FCTRLbits.DMABS = 0;
 
-#if 1
   /* put the module in normal mode */
   C1CTRL1bits.REQOP = 0;
   while (C1CTRL1bits.OPMODE != 0) ;
-#else
-  /* put the module in loopback mode */
-  C1CTRL1bits.REQOP = 2;
-  while (C1CTRL1bits.OPMODE != 2) ;
-#endif
 
   C1RXFUL1 = 0;
   C1RXFUL2 = 0;
@@ -415,6 +409,12 @@ static inline void idle(void)
 #endif /* CONFIG_USE_INTERRUPT */
 
 
+#if CONFIG_USE_INTERRUPT
+/* uart buffer index */
+static volatile unsigned int uart_index = 0;
+#endif /* CONFIG_USE_INTERRUPT */
+
+
 /* main */
 
 int main(void)
@@ -431,6 +431,16 @@ int main(void)
   uart_setup();
   ecan_setup();
 
+#if CONFIG_USE_INTERRUPT
+  {
+    volatile unsigned int i, j;
+    for (i = 0; i < 10000; ++i)
+      for (j = 0; j < 1000; ++j)
+	asm("nop");
+    uart_index = 0;
+  }
+#endif /* CONFIG_USE_INTERRUPT */
+
   while (1)
   {
 #if CONFIG_USE_INTERRUPT
@@ -439,7 +449,7 @@ int main(void)
     if (uart_is_rx())
     {
       uart_read(buf);
-      handle_scab_cmd(buffer);
+      handle_scab_cmd(buf);
     }
 
     buf_index = ecan_is_rx();
@@ -461,8 +471,6 @@ int main(void)
 #if CONFIG_USE_INTERRUPT
 
 /* interrupt handlers */
-
-static unsigned int uart_index = 0;
 static uint8_t uart_buffer[SCAB_CMD_SIZE];
 
 void __attribute__((__interrupt__, no_auto_psv)) _U1RXInterrupt(void)
@@ -472,7 +480,10 @@ void __attribute__((__interrupt__, no_auto_psv)) _U1RXInterrupt(void)
     uart_buffer[uart_index++] = U1RXREG;
 
     if (uart_index == sizeof(uart_buffer))
+    {
       handle_scab_cmd(uart_buffer);
+      uart_index = 0;
+    }
   }
 
   IFS0bits.U1RXIF = 0;
