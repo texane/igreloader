@@ -63,50 +63,61 @@ static int com_write(serial_handle_t* handle, uint16_t sid, const uint8_t* buf)
   return (size == 0) ? 0 : -1;
 }
 
-static inline int com_read(serial_handle_t* handle, uint8_t* buf)
+static inline int com_read_sid(serial_handle_t* handle, uint16_t* sid)
 {
-#if CONFIG_USE_CAN_BRIDGE
+  return serial_readn(handle, (void*)sid, sizeof(uint16_t));
+}
 
+static int com_read_timeout
+(serial_handle_t* handle, uint8_t* buf, unsigned int ms)
+{
+  /* ms the timeout in milliseconds, or 0 */
+  /* return -2 on timeout */
+
+#if CONFIG_USE_CAN_BRIDGE
   uint16_t sid;
+#endif /* CONFIG_USE_CAN_BRIDGE */
 
   while (1)
   {
-    if (serial_readn(handle, (void*)&sid, sizeof(uint16_t))) return -1;
-    if (MASK_CAN_PRIO_ID(sid) == HOST_NODE_ID) break ;
-    /* filter messages */
+    if (ms != 0)
+    {
+      int err;
+      struct timeval tm;
+      fd_set fds;
+
+      tm.tv_sec = ms / 1000;
+      tm.tv_usec = 1000 * (ms % 1000);
+
+      FD_ZERO(&fds);
+      FD_SET(handle->fd, &fds);
+  
+      err = select(handle->fd + 1, &fds, NULL, NULL, &tm);
+      /* timeout or error */
+      if (err != 1)  return err == 0 ? -2 : -1;
+    }
+
+    /* read a full frame */
+
+#if CONFIG_USE_CAN_BRIDGE
+    if (com_read_sid(handle, &sid)) return -1;
+#endif
+
     if (serial_readn(handle, buf, CMD_BUF_SIZE)) return -1;
-  }
 
-#endif /* CONFIG_USE_CAN_BRIDGE */
+#if CONFIG_USE_CAN_BRIDGE
+    /* skip the message */
+    if (MASK_CAN_PRIO_ID(sid) == HOST_NODE_ID) break ;
+#endif
 
-  return serial_readn(handle, buf, CMD_BUF_SIZE);
+  } /* while (1) */
+
+  return 0;
 }
 
-static inline int com_read_timeout
-(serial_handle_t* handle, uint8_t* buf, unsigned int ms)
+static inline int com_read(serial_handle_t* handle, uint8_t* buf)
 {
-  /* ms the timeout, in milliseconds */
-  /* return -2 on timeout */
-
-  struct timeval tm;
-  int err;
-  fd_set fds;
-
-  tm.tv_sec = ms / 1000;
-  tm.tv_usec = 1000 * (ms % 1000);
-
-  FD_ZERO(&fds);
-  FD_SET(handle->fd, &fds);
-  
-  err = select(handle->fd + 1, &fds, NULL, NULL, &tm);
-  if (err == 1)
-  {
-    /* no timeout */
-    return com_read(handle, buf);
-  }
-
-  /* timeout or error */
-  return err == 0 ? -2 : -1;
+  return com_read_timeout(handle, buf, 0);
 }
 
 
